@@ -1,0 +1,7 @@
+services:
+  adhan:
+    build:
+      dockerfile: Dockerfile_DEV
+    image: adhan:dev
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix

@@ -1,0 +1,22 @@
+FROM rust:1.75-slim-bookworm
+
+RUN apt update && apt upgrade -y
+RUN apt install -y \
+    libasound2-dev \
+    libasound2 \
+    pkg-config
+
+WORKDIR /app
+
+COPY Cargo.lock .
+COPY Cargo.toml .
+COPY dummy.rs src/lib.rs
+
+RUN cargo fetch
+RUN cargo check
+
+RUN cargo build
+
+COPY src/main.rs /app/src/main.rs
+
+CMD ["cargo", "run"]
