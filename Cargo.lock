@@ -154,9 +154,9 @@ checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 
 [[package]]
 name = "bumpalo"
-version = "3.15.3"
+version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea184aa71bb362a1157c896979544cc23974e08fd265f29ea96b59f0b4a555b"
+checksum = "7ff69b9dd49fd426c69a0db9fc04dd934cdb6645ff000864d98f7e2af8830eaa"
 
 [[package]]
 name = "bytecount"
@@ -939,7 +939,7 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "salah"
 version = "0.8.0"
-source = "git+https://github.com/N-Hoque/salah?branch=v0.8.0#6df1df045bc26538f9f67b143be15ebc5d2cec65"
+source = "git+https://github.com/N-Hoque/salah?branch=v0.8.0#d41bb70a50a3f1459cf1f78ddabaf9b1a2f736b1"
 dependencies = [
  "chrono",
  "derive_builder",

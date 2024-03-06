@@ -60,15 +60,7 @@ fn main() {
                 if hours == 0 && minutes == 0 {
                     print!("                                               \r");
                     print!("Prayer time is now!\r");
-                    if matches!(
-                        next_prayer,
-                        Prayer::Fajr
-                            | Prayer::FajrTomorrow
-                            | Prayer::Dhuhr
-                            | Prayer::Asr
-                            | Prayer::Maghrib
-                            | Prayer::Isha
-                    ) {
+                    if !matches!(next_prayer, Prayer::Sunrise | Prayer::Qiyam) {
                         play_adhan(next_prayer, &audio_device)
                     }
                     timetable = new_timetable(&parameters);
