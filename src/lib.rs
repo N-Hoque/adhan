@@ -1,10 +1,5 @@
 pub mod model;
 
-pub enum AdhanType {
-    Standard,
-    Fajr,
-}
-
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 pub use model::{AdhanCommands, AdhanListSubcommand};
@@ -12,8 +7,23 @@ use model::{AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
 use salah::{Coordinates, Local, PrayerSchedule, PrayerTimes};
 
+pub static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
-static AUDIO_PATH: &str = "audio";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdhanType {
+    Normal,
+    Fajr,
+}
+
+impl std::fmt::Display for AdhanType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdhanType::Normal => write!(f, "normal"),
+            AdhanType::Fajr => write!(f, "fajr"),
+        }
+    }
+}
 
 fn get_project_config_directory() -> Option<PathBuf> {
     directories_next::ProjectDirs::from("", "", "adhan").map(|project_dirs| project_dirs.config_dir().to_path_buf())
@@ -51,15 +61,15 @@ pub fn create_config(method: Method) {
 
 pub fn play_adhan(adhan_type: AdhanType, device: &str) {
     let Some(config_dir) = get_project_config_directory() else {
-        panic!("AGH")
+        panic!("CRITICAL ERROR: Program directory does not exist.")
     };
 
     let audio_config_path = config_dir.join(AUDIO_PATH);
 
     assert!(
         std::fs::metadata(&audio_config_path).is_ok(),
-        "Audio file for 'Fajr' adhan is not present. Please put one in {}.",
-        audio_config_path.to_string_lossy(),
+        "Audio folder is not present. Please create one at {}.",
+        audio_config_path.display(),
     );
 
     // Get a output stream handle to the default physical sound device
@@ -70,14 +80,16 @@ pub fn play_adhan(adhan_type: AdhanType, device: &str) {
     };
 
     // Load a sound from a file, using a path relative to Cargo.toml
-    let file = BufReader::new(
-        File::open(if let AdhanType::Standard = adhan_type {
-            audio_config_path.join("normal.mp3")
-        } else {
-            audio_config_path.join("fajr.mp3")
-        })
-        .unwrap(),
-    );
+    let Ok(audio_file) = File::open(audio_config_path.join(format!("{}.mp3", adhan_type))) else {
+        panic!(
+            "Audio file not present for '{}'. Please put one in {} and name it '{}.mp3'",
+            adhan_type,
+            audio_config_path.display(),
+            adhan_type
+        )
+    };
+
+    let file = BufReader::new(audio_file);
 
     // Decode that sound file into a source
     let source = Decoder::new(file).unwrap();
