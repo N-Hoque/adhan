@@ -2,7 +2,7 @@ use std::io::Write;
 
 use adhan::{
     create_config, list_audio_devices, list_audio_hosts, new_timetable, play_adhan, read_config, AdhanCommands,
-    AdhanListSubcommand, AdhanType,
+    AdhanListSubcommand, AdhanType, AUDIO_PATH,
 };
 use clap::Parser;
 use salah::Prayer;
@@ -14,7 +14,7 @@ fn initialize_user_config_directory() {
 
     let config_path = project_dirs.config_dir();
 
-    if std::fs::metadata(config_path).is_err() {
+    if std::fs::metadata(config_path.join(AUDIO_PATH)).is_err() {
         std::fs::DirBuilder::new()
             .recursive(true)
             .create(config_path)
@@ -38,7 +38,7 @@ fn main() {
             create_config(method);
         }
         AdhanCommands::Test { audio_device } => {
-            play_adhan(AdhanType::Standard, &audio_device);
+            play_adhan(AdhanType::Normal, &audio_device);
         }
         AdhanCommands::Timetable => {
             let parameters = read_config();
@@ -63,7 +63,7 @@ fn main() {
                     match next_prayer {
                         Prayer::Sunrise | Prayer::Qiyam => {}
                         Prayer::Fajr | Prayer::FajrTomorrow => play_adhan(AdhanType::Fajr, &audio_device),
-                        _ => play_adhan(AdhanType::Standard, &audio_device),
+                        _ => play_adhan(AdhanType::Normal, &audio_device),
                     }
                     timetable = new_timetable(&parameters);
                     next_prayer = timetable.next(&current_time);
