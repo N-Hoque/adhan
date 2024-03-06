@@ -114,18 +114,14 @@ pub fn list_audio_hosts() {
 
 #[must_use]
 pub fn new_timetable(parameters: &AdhanParameters) -> PrayerTimes<Local> {
-    PrayerSchedule::new()
-        .with_date(&chrono::Local::now())
+    PrayerSchedule::<Local>::now()
         .with_coordinates(parameters.coordinates())
         .with_parameters(parameters.parameters())
         .build()
-        .map_or_else(
-            |err| {
-                eprintln!("Failed to calculate prayer times! - {err}");
-                std::process::exit(1);
-            },
-            |ps| ps,
-        )
+        .unwrap_or_else(|err| {
+            eprintln!("Failed to calculate prayer times! - {err}");
+            std::process::exit(1);
+        })
 }
 
 fn get_device(device_name: &str) -> Option<Device> {
