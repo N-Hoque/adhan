@@ -2,7 +2,7 @@ use std::io::Write;
 
 use adhan::{
     create_config, list_audio_devices, list_audio_hosts, new_timetable, play_adhan, read_config, AdhanCommands,
-    AdhanListSubcommand, AdhanType, AUDIO_PATH,
+    AdhanListSubcommand, AUDIO_PATH,
 };
 use clap::Parser;
 use salah::Prayer;
@@ -37,8 +37,8 @@ fn main() {
         AdhanCommands::Generate { method } => {
             create_config(method);
         }
-        AdhanCommands::Test { audio_device } => {
-            play_adhan(AdhanType::Normal, &audio_device);
+        AdhanCommands::Test { audio_device, use_fajr } => {
+            play_adhan(if use_fajr { Prayer::Fajr } else { Prayer::Isha }, &audio_device);
         }
         AdhanCommands::Timetable => {
             let parameters = read_config();
