@@ -5,7 +5,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
-use salah::{Coordinates, Local, PrayerSchedule, PrayerTimes};
+use salah::{Coordinates, Local, Prayer, PrayerSchedule, PrayerTimes};
 
 pub static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
@@ -59,7 +59,7 @@ pub fn create_config(method: Method) {
     .expect("serializing config file");
 }
 
-pub fn play_adhan(adhan_type: AdhanType, device: &str) {
+pub fn play_adhan(prayer: Prayer, device: &str) {
     let Some(config_dir) = get_project_config_directory() else {
         panic!("CRITICAL ERROR: Program directory does not exist.")
     };
@@ -77,6 +77,12 @@ pub fn play_adhan(adhan_type: AdhanType, device: &str) {
         OutputStream::try_from_device(&device)
     }) else {
         panic!("finding output device")
+    };
+
+    let adhan_type = if let Prayer::Fajr | Prayer::FajrTomorrow = prayer {
+        AdhanType::Fajr
+    } else {
+        AdhanType::Normal
     };
 
     // Load a sound from a file, using a path relative to Cargo.toml
