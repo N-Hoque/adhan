@@ -2,6 +2,21 @@ use clap::{Parser, Subcommand, ValueEnum};
 use salah::{Coordinates, Parameters};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AdhanType {
+    Normal,
+    Fajr,
+}
+
+impl std::fmt::Display for AdhanType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdhanType::Normal => write!(f, "normal"),
+            AdhanType::Fajr => write!(f, "fajr"),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AdhanParameters {
     pub coordinates: Coordinates,
@@ -68,6 +83,9 @@ pub enum AdhanCommands {
     Test {
         /// The output audio device to play the Adhan from
         audio_device: String,
+        /// Play Fajr Adhan
+        #[clap(short = 'f', required = false)]
+        use_fajr: bool,
     },
     /// Show prayer timetable
     Timetable,

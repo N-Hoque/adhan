@@ -7,23 +7,10 @@ use model::{AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
 use salah::{Coordinates, Local, Prayer, PrayerSchedule, PrayerTimes};
 
+use crate::model::AdhanType;
+
 pub static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AdhanType {
-    Normal,
-    Fajr,
-}
-
-impl std::fmt::Display for AdhanType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AdhanType::Normal => write!(f, "normal"),
-            AdhanType::Fajr => write!(f, "fajr"),
-        }
-    }
-}
 
 fn get_project_config_directory() -> Option<PathBuf> {
     directories_next::ProjectDirs::from("", "", "adhan").map(|project_dirs| project_dirs.config_dir().to_path_buf())
