@@ -52,7 +52,7 @@ fn main() {
 
             let mut timetable = new_timetable(&parameters);
 
-            let mut next_prayer = timetable.next(&chrono::Local::now());
+            let mut next_prayer = timetable.current(&chrono::Local::now());
 
             loop {
                 let current_time = chrono::Local::now();
@@ -60,11 +60,11 @@ fn main() {
                 if hours == 0 && minutes == 0 {
                     print!("                                               \r");
                     print!("Prayer time is now!\r");
-                    if !matches!(next_prayer, Prayer::Sunrise | Prayer::Qiyam) {
+                    if !matches!(next_prayer, Prayer::Sunrise | Prayer::Qiyam | Prayer::QiyamYesterday) {
                         play_adhan(next_prayer, &audio_device)
                     }
                     timetable = new_timetable(&parameters);
-                    next_prayer = timetable.next(&current_time);
+                    next_prayer = timetable.current(&current_time);
                     print!("                                               \r");
                 } else {
                     print!("Next prayer starts in {hours:>2}h {minutes:>2}m\r");
