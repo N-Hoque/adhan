@@ -47,6 +47,12 @@ pub fn create_config(method: Method) {
 }
 
 pub fn play_adhan(prayer: Prayer, device: &str) {
+    let adhan_type = match prayer {
+        Prayer::Qiyam | Prayer::QiyamYesterday | Prayer::Sunrise => return,
+        Prayer::Fajr | Prayer::FajrTomorrow => AdhanType::Fajr,
+        _ => AdhanType::Normal,
+    };
+
     let Some(config_dir) = get_project_config_directory() else {
         panic!("CRITICAL ERROR: Program directory does not exist.")
     };
@@ -66,14 +72,8 @@ pub fn play_adhan(prayer: Prayer, device: &str) {
         panic!("finding output device")
     };
 
-    let adhan_type = if let Prayer::Fajr | Prayer::FajrTomorrow = prayer {
-        AdhanType::Fajr
-    } else {
-        AdhanType::Normal
-    };
-
     // Load a sound from a file, using a path relative to Cargo.toml
-    let Ok(audio_file) = File::open(audio_config_path.join(format!("{}.mp3", adhan_type))) else {
+    let Ok(audio_file) = File::open(audio_config_path.join(format!("{adhan_type}.mp3"))) else {
         panic!(
             "Audio file not present for '{}'. Please put one in {} and name it '{}.mp3'",
             adhan_type,
