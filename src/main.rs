@@ -13,21 +13,32 @@ fn initialize_user_config_directory() {
     };
 
     let config_path = project_dirs.config_dir();
+    let audio_path = &config_path.join(AUDIO_PATH);
 
-    if std::fs::metadata(config_path.join(AUDIO_PATH)).is_err() {
+    if std::fs::metadata(audio_path).is_err() {
         std::fs::DirBuilder::new()
             .recursive(true)
             .create(config_path)
             .expect("creating config directory");
+
+        println!("Adhan program initialized!");
+        println!("To configure:");
+        println!("- Generate a configuration file using 'adhan generate <METHOD>'");
+        println!(
+            "- Place Fajr adhan audio file at '{}/fajr.mp3' 'adhan generate <METHOD>'",
+            audio_path.display()
+        );
+        println!(
+            "- Place standard adhan audio file at '{}/normal.mp3' 'adhan generate <METHOD>'",
+            audio_path.display()
+        );
     }
 }
 
 fn main() {
     initialize_user_config_directory();
 
-    let args = AdhanCommands::parse();
-
-    match args {
+    match AdhanCommands::parse() {
         AdhanCommands::List(AdhanListSubcommand::Devices) => {
             list_audio_devices();
         }
@@ -52,19 +63,15 @@ fn main() {
 
             let mut timetable = new_timetable(&parameters);
 
-            let mut next_prayer = timetable.current(&chrono::Local::now());
-
             loop {
                 let current_time = chrono::Local::now();
                 let (hours, minutes) = timetable.time_remaining(&current_time);
                 if hours == 0 && minutes == 0 {
+                    let current_prayer = timetable.next(&current_time);
                     print!("                                               \r");
                     print!("Prayer time is now!\r");
-                    if !matches!(next_prayer, Prayer::Sunrise | Prayer::Qiyam | Prayer::QiyamYesterday) {
-                        play_adhan(next_prayer, &audio_device)
-                    }
+                    play_adhan(current_prayer, &audio_device);
                     timetable = new_timetable(&parameters);
-                    next_prayer = timetable.current(&current_time);
                     print!("                                               \r");
                 } else {
                     print!("Next prayer starts in {hours:>2}h {minutes:>2}m\r");
