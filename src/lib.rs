@@ -9,16 +9,22 @@ use salah::{Coordinates, Local, Prayer, PrayerSchedule, PrayerTimes};
 
 use crate::model::AdhanType;
 
-pub static AUDIO_PATH: &str = "audio";
+static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
 
-fn get_project_config_directory() -> Option<PathBuf> {
+#[must_use]
+pub fn adhan_base_directory() -> Option<PathBuf> {
     directories_next::ProjectDirs::from("", "", "adhan").map(|project_dirs| project_dirs.config_dir().to_path_buf())
 }
 
 #[must_use]
+pub fn adhan_audio_directory() -> Option<PathBuf> {
+    adhan_base_directory().map(|p| p.join(AUDIO_PATH))
+}
+
+#[must_use]
 pub fn read_config() -> AdhanParameters {
-    let Some(config_dir) = get_project_config_directory() else {
+    let Some(config_dir) = adhan_base_directory() else {
         panic!("AGH")
     };
 
@@ -29,7 +35,7 @@ pub fn read_config() -> AdhanParameters {
 }
 
 pub fn create_config(method: Method) {
-    let Some(config_dir) = get_project_config_directory() else {
+    let Some(config_dir) = adhan_base_directory() else {
         panic!("AGH")
     };
 
@@ -53,11 +59,14 @@ pub fn play_adhan(prayer: Prayer, device: &str) {
         _ => AdhanType::Normal,
     };
 
-    let Some(config_dir) = get_project_config_directory() else {
-        panic!("CRITICAL ERROR: Program directory does not exist.")
-    };
+    assert!(
+        adhan_base_directory().is_some(),
+        "CRITICAL ERROR: Cannot find config directory"
+    );
 
-    let audio_config_path = config_dir.join(AUDIO_PATH);
+    let Some(audio_config_path) = adhan_audio_directory() else {
+        panic!("CRITICAL ERROR: Cannot find audio directory in config path")
+    };
 
     assert!(
         std::fs::metadata(&audio_config_path).is_ok(),

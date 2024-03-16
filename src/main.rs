@@ -1,24 +1,21 @@
 use std::io::Write;
 
 use adhan::{
-    create_config, list_audio_devices, list_audio_hosts, new_timetable, play_adhan, read_config, AdhanCommands,
-    AdhanListSubcommand, AUDIO_PATH,
+    adhan_audio_directory, adhan_base_directory, create_config, list_audio_devices, list_audio_hosts, new_timetable,
+    play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
 };
 use clap::Parser;
 use salah::Prayer;
 
 fn initialize_user_config_directory() {
-    let Some(project_dirs) = directories_next::ProjectDirs::from("", "", "adhan") else {
+    let Some(ref audio_path) = adhan_audio_directory() else {
         panic!("AGH")
     };
 
-    let config_path = project_dirs.config_dir();
-    let audio_path = &config_path.join(AUDIO_PATH);
-
-    if std::fs::metadata(audio_path).is_err() {
+    if adhan_base_directory().is_none() {
         std::fs::DirBuilder::new()
             .recursive(true)
-            .create(config_path)
+            .create(audio_path)
             .expect("creating config directory");
 
         println!("Adhan program initialized!");
