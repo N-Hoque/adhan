@@ -24,12 +24,12 @@ pub struct AdhanParameters {
 }
 
 impl AdhanParameters {
-    pub(crate) const fn coordinates(&self) -> Coordinates {
-        self.coordinates
+    pub(crate) fn coordinates(&self) -> Coordinates {
+        self.coordinates.clone()
     }
 
-    pub(crate) const fn parameters(&self) -> Parameters {
-        self.parameters
+    pub(crate) fn parameters(&self) -> Parameters {
+        self.parameters.clone()
     }
 }
 

@@ -53,7 +53,8 @@ fn main() {
 
             let timetable = new_timetable(&parameters);
 
-            println!("{timetable}");
+            let current_time = chrono::Local::now();
+            timetable.display(&current_time);
         }
         AdhanCommands::Run { audio_device } => {
             let parameters = read_config();
@@ -64,7 +65,7 @@ fn main() {
                 let current_time = chrono::Local::now();
                 let (hours, minutes) = timetable.time_remaining(&current_time);
                 if hours == 0 && minutes == 0 {
-                    let current_prayer = timetable.next(&current_time);
+                    let (current_prayer, _) = timetable.next(&current_time);
                     print!("                                               \r");
                     print!("Prayer time is now!\r");
                     play_adhan(current_prayer, &audio_device);

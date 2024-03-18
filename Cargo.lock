@@ -945,7 +945,7 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "salah"
 version = "0.8.0"
-source = "git+https://github.com/N-Hoque/salah?branch=v0.8.0#3fd909d3fa2003dd0a74436d758b4c5cf5241d45"
+source = "git+https://github.com/N-Hoque/salah?branch=v0.8.0#2bd02e4abf64a9f9011d9e95adaf70e2fdd60f31"
 dependencies = [
  "chrono",
  "derive_builder",
