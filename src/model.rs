@@ -84,7 +84,7 @@ pub enum AdhanCommands {
         /// The output audio device to play the Adhan from
         audio_device: String,
         /// Play Fajr Adhan
-        #[clap(short = 'f', required = false)]
+        #[clap(short = 'f', long, required = false)]
         use_fajr: bool,
     },
     /// Show prayer timetable
