@@ -54,7 +54,7 @@ pub fn create_config(method: Method) {
 
 pub fn play_adhan(prayer: Prayer, device: &str) {
     let adhan_type = match prayer {
-        Prayer::Qiyam | Prayer::Sunrise | Prayer::Forbidden(_) => return,
+        Prayer::Qiyam | Prayer::Sunrise | Prayer::Restricted(_) => return,
         Prayer::Fajr => AdhanType::Fajr,
         _ => AdhanType::Normal,
     };
