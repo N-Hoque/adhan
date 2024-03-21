@@ -5,7 +5,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
-use salah::{Coordinates, Local, Prayer, Schedule, Times};
+use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
 use crate::model::AdhanType;
 
@@ -52,10 +52,10 @@ pub fn create_config(method: Method) {
     .expect("serializing config file");
 }
 
-pub fn play_adhan(prayer: Prayer, device: &str) {
+pub fn play_adhan(prayer: Event, device: &str) {
     let adhan_type = match prayer {
-        Prayer::Qiyam | Prayer::Sunrise | Prayer::Restricted(_) => return,
-        Prayer::Fajr => AdhanType::Fajr,
+        Event::Qiyam | Event::Sunrise | Event::Restricted(_) => return,
+        Event::Prayer(Prayer::Fajr) => AdhanType::Fajr,
         _ => AdhanType::Normal,
     };
 
