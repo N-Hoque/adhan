@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "adhan"
-version = "1.0.1-rc2"
+version = "1.0.1-rc3"
 dependencies = [
  "chrono",
  "clap",
