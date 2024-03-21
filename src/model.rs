@@ -82,6 +82,7 @@ pub enum AdhanCommands {
     /// Test audio playback
     Test {
         /// The output audio device to play the Adhan from
+        #[clap(default_value = "default")]
         audio_device: String,
         /// Play Fajr Adhan
         #[clap(short = 'f', long, required = false)]
