@@ -11,8 +11,8 @@ pub(crate) enum AdhanType {
 impl std::fmt::Display for AdhanType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AdhanType::Normal => write!(f, "normal"),
-            AdhanType::Fajr => write!(f, "fajr"),
+            Self::Normal => write!(f, "normal"),
+            Self::Fajr => write!(f, "fajr"),
         }
     }
 }

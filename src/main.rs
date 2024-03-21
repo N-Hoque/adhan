@@ -5,7 +5,7 @@ use adhan::{
     play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
 };
 use clap::Parser;
-use salah::{Datelike, Prayer};
+use salah::{Datelike, Event, Prayer};
 
 fn initialize_user_config_directory() {
     let Some(ref audio_path) = adhan_audio_directory() else {
@@ -46,7 +46,14 @@ fn main() {
             create_config(method);
         }
         AdhanCommands::Test { audio_device, use_fajr } => {
-            play_adhan(if use_fajr { Prayer::Fajr } else { Prayer::Isha }, &audio_device);
+            play_adhan(
+                if use_fajr {
+                    Event::Prayer(Prayer::Fajr)
+                } else {
+                    Event::Prayer(Prayer::Isha)
+                },
+                &audio_device,
+            );
         }
         AdhanCommands::Timetable => {
             let parameters = read_config();
@@ -65,26 +72,23 @@ fn main() {
                 let current_time = chrono::Local::now();
                 let (hours, minutes) = timetable.time_remaining(&current_time);
                 let expected_prayers = timetable.expected(&current_time);
-                let next_prayer = expected_prayers.next_prayer();
-                let prayer_name = if current_time.weekday() == chrono::Weekday::Fri {
-                    next_prayer.friday_name()
+                let next_event = expected_prayers.next_event();
+                let event_name = if current_time.weekday() == chrono::Weekday::Fri {
+                    next_event.friday_name()
                 } else {
-                    next_prayer.name()
+                    next_event.name()
                 };
 
                 if hours == 0 && minutes == 0 {
                     print!("                                                        \r");
-                    print!("{prayer_name} is now!\r");
-                    play_adhan(next_prayer, &audio_device);
+                    print!("{event_name} is now!\r");
+                    play_adhan(next_event, &audio_device);
                     timetable = new_timetable(&parameters);
                     print!("                                                        \r");
-                } else if matches!(
-                    next_prayer,
-                    Prayer::Fajr | Prayer::Dhuhr | Prayer::Asr | Prayer::Maghrib | Prayer::Isha
-                ) {
-                    print!("{prayer_name} prayer starts in:{hours:>2}h {minutes:>2}m\r");
+                } else if matches!(next_event, Event::Prayer(_)) {
+                    print!("{event_name} prayer starts in:{hours:>2}h {minutes:>2}m\r");
                 } else {
-                    print!("Waiting...\r");
+                    print!("Waiting for:{hours:>2}h {minutes:>2}...\r");
                 }
                 let _ = std::io::stdout().flush();
                 std::thread::sleep(std::time::Duration::from_secs(1));
