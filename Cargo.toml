@@ -1,6 +1,6 @@
 [package]
 name = "adhan"
-version = "1.0.1-rc1"
+version = "1.0.1-rc2"
 edition = "2018"
 license = "MIT"
 rust-version = "1.59"
