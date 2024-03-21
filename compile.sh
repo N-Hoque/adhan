@@ -33,14 +33,14 @@ else
 fi
 
 docker build -t ${TARGET_IMAGE} -f ${TARGET_DOCKERFILE} .
-cross build --profile performance --target ${TARGET_ARCH}
+cross build --profile size --target ${TARGET_ARCH}
 
 if [ -n "$DEPLOY" ]; then
 	if [ -z "$USER" ] || [ -z "$IP" ]; then
 		echo "Must supply USER and IP to deploy"
 		exit 1
 	fi
-	rsync -vihP target/${TARGET_ARCH}/performance/adhan "${USER}@${IP}:adhan_player"
+	rsync -vihP target/${TARGET_ARCH}/size/adhan "${USER}@${IP}:adhan_player"
 fi
 
 exit 0
