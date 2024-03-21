@@ -5,7 +5,7 @@ use adhan::{
     play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
 };
 use clap::Parser;
-use salah::Prayer;
+use salah::{Datelike, Prayer};
 
 fn initialize_user_config_directory() {
     let Some(ref audio_path) = adhan_audio_directory() else {
@@ -66,9 +66,15 @@ fn main() {
                 let (hours, minutes) = timetable.time_remaining(&current_time);
                 let expected_prayers = timetable.expected(&current_time);
                 let next_prayer = expected_prayers.next_prayer();
+                let prayer_name = if current_time.weekday() == chrono::Weekday::Fri {
+                    next_prayer.friday_name()
+                } else {
+                    next_prayer.name()
+                };
+
                 if hours == 0 && minutes == 0 {
                     print!("                                                        \r");
-                    print!("{next_prayer} is now!\r");
+                    print!("{prayer_name} is now!\r");
                     play_adhan(next_prayer, &audio_device);
                     timetable = new_timetable(&parameters);
                     print!("                                                        \r");
@@ -76,7 +82,7 @@ fn main() {
                     next_prayer,
                     Prayer::Fajr | Prayer::Dhuhr | Prayer::Asr | Prayer::Maghrib | Prayer::Isha
                 ) {
-                    print!("{next_prayer} prayer starts in:{hours:>2}h {minutes:>2}m\r");
+                    print!("{prayer_name} prayer starts in:{hours:>2}h {minutes:>2}m\r");
                 } else {
                     print!("Waiting...\r");
                 }
