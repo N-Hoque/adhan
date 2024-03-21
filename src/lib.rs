@@ -5,7 +5,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
-use salah::{Coordinates, Local, Prayer, PrayerSchedule, PrayerTimes};
+use salah::{Coordinates, Local, Prayer, Schedule, Times};
 
 use crate::model::AdhanType;
 
@@ -122,8 +122,8 @@ pub fn list_audio_hosts() {
 }
 
 #[must_use]
-pub fn new_timetable(parameters: &AdhanParameters) -> PrayerTimes<Local> {
-    PrayerSchedule::<Local>::now()
+pub fn new_timetable(parameters: &AdhanParameters) -> Times<Local> {
+    Schedule::<Local>::now()
         .with_coordinates(parameters.coordinates())
         .with_parameters(parameters.parameters())
         .build()
