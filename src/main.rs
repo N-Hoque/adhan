@@ -64,15 +64,21 @@ fn main() {
             loop {
                 let current_time = chrono::Local::now();
                 let (hours, minutes) = timetable.time_remaining(&current_time);
+                let expected_prayers = timetable.expected(&current_time);
+                let next_prayer = expected_prayers.next_prayer();
                 if hours == 0 && minutes == 0 {
-                    let expected_prayers = timetable.expected(&current_time);
-                    print!("                                               \r");
-                    print!("Prayer time is now!\r");
-                    play_adhan(expected_prayers.next_prayer(), &audio_device);
+                    print!("                                                        \r");
+                    print!("{next_prayer} is now!\r");
+                    play_adhan(next_prayer, &audio_device);
                     timetable = new_timetable(&parameters);
-                    print!("                                               \r");
+                    print!("                                                        \r");
+                } else if matches!(
+                    next_prayer,
+                    Prayer::Fajr | Prayer::Dhuhr | Prayer::Asr | Prayer::Maghrib | Prayer::Isha
+                ) {
+                    print!("{next_prayer} prayer starts in:{hours:>2}h {minutes:>2}m\r");
                 } else {
-                    print!("Next prayer starts in {hours:>2}h {minutes:>2}m\r");
+                    print!("Waiting...\r");
                 }
                 let _ = std::io::stdout().flush();
                 std::thread::sleep(std::time::Duration::from_secs(1));
