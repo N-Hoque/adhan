@@ -25,7 +25,7 @@ pub fn adhan_audio_directory() -> Option<PathBuf> {
 #[must_use]
 pub fn read_config() -> AdhanParameters {
     let Some(config_dir) = adhan_base_directory() else {
-        panic!("AGH")
+        panic!("get config directory")
     };
 
     let config_path = config_dir.join(SETTINGS_FILE);
@@ -36,11 +36,11 @@ pub fn read_config() -> AdhanParameters {
 
 pub fn create_config(method: Method) {
     let Some(config_dir) = adhan_base_directory() else {
-        panic!("AGH")
+        panic!("get config directory")
     };
 
     let config_path = config_dir.join(SETTINGS_FILE);
-    let file = File::create(config_path).expect("opening config file");
+    let file = File::create(config_path).unwrap();
 
     serde_yaml::to_writer(
         file,

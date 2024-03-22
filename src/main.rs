@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{fs::DirBuilder, io::Write};
 
 use adhan::{
     adhan_audio_directory, adhan_base_directory, create_config, list_audio_devices, list_audio_hosts, new_timetable,
@@ -8,12 +8,12 @@ use clap::Parser;
 use salah::{Datelike, Event, Prayer};
 
 fn initialize_user_config_directory() {
-    let Some(ref audio_path) = adhan_audio_directory() else {
-        panic!("AGH")
-    };
+    if adhan_base_directory().is_some_and(|dir| !dir.exists()) {
+        let Some(ref audio_path) = adhan_audio_directory() else {
+            panic!("get audio config directory")
+        };
 
-    if adhan_base_directory().is_none() {
-        std::fs::DirBuilder::new()
+        DirBuilder::new()
             .recursive(true)
             .create(audio_path)
             .expect("creating config directory");
@@ -21,12 +21,9 @@ fn initialize_user_config_directory() {
         println!("Adhan program initialized!");
         println!("To configure:");
         println!("- Generate a configuration file using 'adhan generate <METHOD>'");
+        println!("- Place Fajr adhan audio file at '{}/fajr.mp3'", audio_path.display());
         println!(
-            "- Place Fajr adhan audio file at '{}/fajr.mp3' 'adhan generate <METHOD>'",
-            audio_path.display()
-        );
-        println!(
-            "- Place standard adhan audio file at '{}/normal.mp3' 'adhan generate <METHOD>'",
+            "- Place standard adhan audio file at '{}/normal.mp3'",
             audio_path.display()
         );
     }
