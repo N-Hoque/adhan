@@ -1,6 +1,29 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use salah::{Coordinates, Parameters};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AdhanAudioError {
+    #[error("stream failure {0}")]
+    Stream(#[from] rodio::StreamError),
+    #[error("decode failure {0}")]
+    Decode(#[from] rodio::decoder::DecoderError),
+    #[error("playback failure {0}")]
+    Playback(#[from] rodio::PlayError),
+}
+
+#[derive(Debug, Error)]
+pub enum AdhanError {
+    #[error("file IO failure")]
+    IO(#[from] std::io::Error),
+    #[error("file IO failure")]
+    Serialisation(#[from] serde_yaml::Error),
+    #[error("configuration failure {0}")]
+    Configuration(String),
+    #[error("audio handler failed: {0}")]
+    Audio(AdhanAudioError),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AdhanType {

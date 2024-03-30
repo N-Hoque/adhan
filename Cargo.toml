@@ -27,6 +27,9 @@ rodio = "0.17.3"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_yaml = "0.9.32"
 directories-next = "2.0.0"
+simplelog = "0.12.2"
+thiserror = "1.0.58"
+log = "0.4.21"
 
 [package.metadata.cross.target.aarch64-unknown-linux-gnu]
 image = "adhan-aarch64"

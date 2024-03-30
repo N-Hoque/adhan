@@ -1,46 +1,67 @@
 pub mod model;
 
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{
+    fs::{DirBuilder, File},
+    io::BufReader,
+    path::PathBuf,
+};
 
 pub use model::{AdhanCommands, AdhanListSubcommand};
-use model::{AdhanParameters, Method};
+use model::{AdhanError, AdhanParameters, Method};
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
 use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
-use crate::model::AdhanType;
+use crate::model::{AdhanAudioError, AdhanType};
 
 static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
 
-#[must_use]
-pub fn adhan_base_directory() -> Option<PathBuf> {
-    directories_next::ProjectDirs::from("", "", "adhan").map(|project_dirs| project_dirs.config_dir().to_path_buf())
+pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
+    if adhan_base_directory().is_ok_and(|dir| !dir.exists()) {
+        let audio_path = &adhan_audio_directory()?;
+
+        DirBuilder::new()
+            .recursive(true)
+            .create(audio_path)
+            .map_err(AdhanError::IO)?;
+
+        log::info!("Adhan program initialized!");
+        log::info!("To configure:");
+        log::info!("- Generate a configuration file using 'adhan generate <METHOD>'");
+        log::info!("- Place Fajr adhan audio file at '{}/fajr.mp3'", audio_path.display());
+        log::info!(
+            "- Place standard adhan audio file at '{}/normal.mp3'",
+            audio_path.display()
+        );
+    }
+
+    Ok(())
 }
 
-#[must_use]
-pub fn adhan_audio_directory() -> Option<PathBuf> {
+pub fn adhan_base_directory() -> Result<PathBuf, AdhanError> {
+    directories_next::ProjectDirs::from("", "", "adhan")
+        .ok_or_else(|| AdhanError::Configuration("cannot generate configuration folder for 'adhan'".into()))
+        .map(|project_dirs| project_dirs.config_dir().to_path_buf())
+}
+
+pub fn adhan_audio_directory() -> Result<PathBuf, AdhanError> {
     adhan_base_directory().map(|p| p.join(AUDIO_PATH))
 }
 
-#[must_use]
-pub fn read_config() -> AdhanParameters {
-    let Some(config_dir) = adhan_base_directory() else {
-        panic!("get config directory")
-    };
+pub fn read_config() -> Result<AdhanParameters, AdhanError> {
+    let config_dir = adhan_base_directory()?;
 
     let config_path = config_dir.join(SETTINGS_FILE);
-    let file = File::open(config_path).expect("reading config file");
+    let file = File::open(config_path).map_err(AdhanError::IO)?;
 
-    serde_yaml::from_reader(file).expect("deserializing config file")
+    serde_yaml::from_reader(file).map_err(AdhanError::Serialisation)
 }
 
-pub fn create_config(method: Method) {
-    let Some(config_dir) = adhan_base_directory() else {
-        panic!("get config directory")
-    };
+pub fn create_config(method: Method) -> Result<(), AdhanError> {
+    let config_dir = adhan_base_directory()?;
 
     let config_path = config_dir.join(SETTINGS_FILE);
-    let file = File::create(config_path).unwrap();
+    let file = File::create(config_path).map_err(AdhanError::IO)?;
 
     serde_yaml::to_writer(
         file,
@@ -49,24 +70,17 @@ pub fn create_config(method: Method) {
             parameters: method.parameters(),
         },
     )
-    .expect("serializing config file");
+    .map_err(AdhanError::Serialisation)
 }
 
-pub fn play_adhan(prayer: Event, device: &str) {
+pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
     let adhan_type = match prayer {
-        Event::Qiyam | Event::Sunrise | Event::Restricted(_) => return,
+        Event::Qiyam | Event::Sunrise | Event::Restricted(_) => return Ok(()),
         Event::Prayer(Prayer::Fajr) => AdhanType::Fajr,
         _ => AdhanType::Normal,
     };
 
-    assert!(
-        adhan_base_directory().is_some(),
-        "CRITICAL ERROR: Cannot find config directory"
-    );
-
-    let Some(audio_config_path) = adhan_audio_directory() else {
-        panic!("CRITICAL ERROR: Cannot find audio directory in config path")
-    };
+    let audio_config_path = adhan_audio_directory()?;
 
     assert!(
         std::fs::metadata(&audio_config_path).is_ok(),
@@ -75,28 +89,22 @@ pub fn play_adhan(prayer: Event, device: &str) {
     );
 
     // Get a output stream handle to the default physical sound device
-    let Ok((_stream, stream_handle)) = get_device(device).map_or_else(OutputStream::try_default, |device| {
-        OutputStream::try_from_device(&device)
-    }) else {
-        panic!("finding output device")
-    };
+
+    let (_stream, stream_handle) = get_device(device)
+        .map_or_else(OutputStream::try_default, |device| {
+            OutputStream::try_from_device(&device)
+        })
+        .map_err(|err| AdhanError::Audio(AdhanAudioError::Stream(err)))?;
 
     // Load a sound from a file, using a path relative to Cargo.toml
-    let Ok(audio_file) = File::open(audio_config_path.join(format!("{adhan_type}.mp3"))) else {
-        panic!(
-            "Audio file not present for '{}'. Please put one in {} and name it '{}.mp3'",
-            adhan_type,
-            audio_config_path.display(),
-            adhan_type
-        )
-    };
+    let audio_file = File::open(audio_config_path.join(format!("{adhan_type}.mp3"))).map_err(AdhanError::IO)?;
 
     let file = BufReader::new(audio_file);
 
     // Decode that sound file into a source
-    let source = Decoder::new(file).unwrap();
+    let source = Decoder::new(file).map_err(|err| AdhanError::Audio(AdhanAudioError::Decode(err)))?;
 
-    let sink = Sink::try_new(&stream_handle).unwrap();
+    let sink = Sink::try_new(&stream_handle).map_err(|err| AdhanError::Audio(AdhanAudioError::Playback(err)))?;
 
     // Add a dummy source of the sake of the example.
     sink.append(source);
@@ -104,20 +112,22 @@ pub fn play_adhan(prayer: Event, device: &str) {
     // The sound plays in a separate thread. This call will block the current thread until the sink
     // has finished playing all its queued sounds.
     sink.sleep_until_end();
+
+    Ok(())
 }
 
 pub fn list_audio_devices() {
     let host = rodio::cpal::default_host();
     if let Ok(devices) = host.output_devices() {
         for (idx, device) in devices.flat_map(|device| device.name()).enumerate() {
-            println!("{idx}: {device}");
+            log::info!("{idx}: {device}");
         }
     }
 }
 
 pub fn list_audio_hosts() {
     for (idx, device) in rodio::cpal::available_hosts().iter().enumerate() {
-        println!("{}: {}", idx, device.name());
+        log::info!("{}: {}", idx, device.name());
     }
 }
 
@@ -128,7 +138,7 @@ pub fn new_timetable(parameters: &AdhanParameters) -> Times<Local> {
         .with_parameters(parameters.parameters())
         .build()
         .unwrap_or_else(|err| {
-            eprintln!("Failed to calculate prayer times! - {err}");
+            log::error!("Failed to calculate prayer times! - {err}");
             std::process::exit(1);
         })
 }
