@@ -23,6 +23,6 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.7.3
       - name: Build binary
-        run: cargo build --profile performance --verbose
+        run: cargo build --profile size --verbose
       - name: Run tests
         run: cargo test --verbose
