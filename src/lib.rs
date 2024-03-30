@@ -120,14 +120,14 @@ pub fn list_audio_devices() {
     let host = rodio::cpal::default_host();
     if let Ok(devices) = host.output_devices() {
         for (idx, device) in devices.flat_map(|device| device.name()).enumerate() {
-            log::info!("{idx}: {device}");
+            println!("{idx}: {device}");
         }
     }
 }
 
 pub fn list_audio_hosts() {
     for (idx, device) in rodio::cpal::available_hosts().iter().enumerate() {
-        log::info!("{}: {}", idx, device.name());
+        println!("{}: {}", idx, device.name());
     }
 }
 
