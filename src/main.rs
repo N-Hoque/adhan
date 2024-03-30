@@ -76,6 +76,8 @@ fn main() {
             Ok(parameters) => {
                 let mut timetable = new_timetable(&parameters);
 
+                log::info!("Started Adhan!");
+
                 loop {
                     let current_time = chrono::Local::now();
                     let (hours, minutes) = timetable.time_remaining(&current_time);
@@ -94,10 +96,12 @@ fn main() {
                             std::process::exit(PLAYBACK_EXIT_CODE);
                         }
                         timetable = new_timetable(&parameters);
-                    } else if matches!(next_event, Event::Prayer(_)) {
-                        log::info!("{event_name} prayer starts in:{hours:>2}h {minutes:>2}m");
-                    } else {
-                        log::info!("Waiting for:{hours:>2}h {minutes:>2}...");
+                    } else if (hours > 0 && minutes == 0) || (hours == 0 && minutes % 5 == 0) {
+                        if matches!(next_event, Event::Prayer(_)) {
+                            log::info!("{event_name} prayer starts in:{hours:>2}h {minutes:>2}m");
+                        } else {
+                            log::info!("Waiting for:{hours:>2}h {minutes:>2}...");
+                        }
                     }
                     let _ = std::io::stdout().flush();
                     std::thread::sleep(std::time::Duration::from_secs(1));
