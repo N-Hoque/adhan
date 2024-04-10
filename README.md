@@ -15,6 +15,8 @@ These files must be present to fully run the program. Audio files must be source
 
 The program can be called via the CLI: `./adhan`. Doing so shows the following commands available to use:
 
+Command | Description
+--:|:--
 `run` | Runs the program. Uses the default audio device, but can specify others as well
 `test` | Test audio playback. Can pass in the `--use-fajr` flag to specifically play the Fajr adhan
 `generate` | Generates configuration file. Defaults to `Other` for full control, but can use a specific method as well
