@@ -4,6 +4,7 @@ use adhan::{
     create_config, initialize_user_config_directory, list_audio_devices, list_audio_hosts, new_timetable, play_adhan,
     read_config, AdhanCommands, AdhanListSubcommand,
 };
+use chrono::Timelike;
 use clap::Parser;
 use salah::{Datelike, Event, Prayer};
 
@@ -81,6 +82,7 @@ fn main() {
                 loop {
                     let current_time = chrono::Local::now();
                     let (hours, minutes) = timetable.time_remaining(&current_time);
+                    let seconds = current_time.second();
                     let expected_prayers = timetable.expected(&current_time);
                     let next_event = expected_prayers.next_event();
                     let event_name = if current_time.weekday() == chrono::Weekday::Fri {
@@ -96,11 +98,11 @@ fn main() {
                             std::process::exit(PLAYBACK_EXIT_CODE);
                         }
                         timetable = new_timetable(&parameters);
-                    } else if (hours > 0 && minutes == 0) || (hours == 0 && minutes % 5 == 0) {
+                    } else if ((hours > 0 && minutes == 0) || (hours == 0 && minutes % 5 == 0)) && seconds == 0 {
                         if matches!(next_event, Event::Prayer(_)) {
                             log::info!("{event_name} prayer starts in:{hours:>2}h {minutes:>2}m");
                         } else {
-                            log::info!("Waiting for:{hours:>2}h {minutes:>2}...");
+                            log::info!("Waiting for:{hours:>2}h {minutes:>2}m...");
                         }
                     }
                     let _ = std::io::stdout().flush();
