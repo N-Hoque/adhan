@@ -23,6 +23,8 @@ pub enum AdhanError {
     Configuration(String),
     #[error("audio handler failed: {0}")]
     Audio(AdhanAudioError),
+    #[error("unexpected error: {0}")]
+    Misc(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -8,6 +8,7 @@ use std::{
 
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanError, AdhanParameters, Method};
+use rand::seq::SliceRandom;
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
 use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
@@ -94,17 +95,49 @@ pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
         .map_or_else(OutputStream::try_default, |device| {
             OutputStream::try_from_device(&device)
         })
-        .map_err(|err| AdhanError::Audio(AdhanAudioError::Stream(err)))?;
+        .map_err(AdhanAudioError::Stream)
+        .map_err(AdhanError::Audio)?;
 
-    // Load a sound from a file, using a path relative to Cargo.toml
-    let audio_file = File::open(audio_config_path.join(format!("{adhan_type}.mp3"))).map_err(AdhanError::IO)?;
+    // Load a sound from a random audio file
+    let audio_dir = std::fs::read_dir(audio_config_path.join({
+        if adhan_type == AdhanType::Fajr {
+            "fajr"
+        } else {
+            "normal"
+        }
+    }))
+    .map_err(AdhanError::IO)?
+    .filter_map(|f| f.ok())
+    .filter_map(|f| {
+        if f.file_type().is_ok_and(|f| f.is_file()) {
+            Some(f)
+        } else {
+            None
+        }
+    })
+    .collect::<Vec<_>>();
+
+    let mut rng = rand::thread_rng();
+
+    let audio_file_path = audio_dir
+        .choose(&mut rng)
+        .ok_or_else(|| AdhanError::Misc(String::from("no audio files available!")))?
+        .path();
+    let audio_file = std::fs::OpenOptions::new()
+        .read(true)
+        .open(audio_file_path)
+        .map_err(AdhanError::IO)?;
 
     let file = BufReader::new(audio_file);
 
     // Decode that sound file into a source
-    let source = Decoder::new(file).map_err(|err| AdhanError::Audio(AdhanAudioError::Decode(err)))?;
+    let source = Decoder::new(file)
+        .map_err(AdhanAudioError::Decode)
+        .map_err(AdhanError::Audio)?;
 
-    let sink = Sink::try_new(&stream_handle).map_err(|err| AdhanError::Audio(AdhanAudioError::Playback(err)))?;
+    let sink = Sink::try_new(&stream_handle)
+        .map_err(AdhanAudioError::Playback)
+        .map_err(AdhanError::Audio)?;
 
     // Add a dummy source of the sake of the example.
     sink.append(source);

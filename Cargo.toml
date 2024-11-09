@@ -1,9 +1,9 @@
 [package]
 name = "adhan"
 version = "1.0.3"
-edition = "2018"
+edition = "2021"
 license = "MIT"
-rust-version = "1.59"
+rust-version = "1.70"
 
 [profile.size]
 inherits = "release"
@@ -15,21 +15,22 @@ strip = "symbols"
 debug = 0
 
 [dependencies]
-chrono = { version = "0.4.31", features = ["serde"] }
-clap = { version = "4.4.12", features = ["derive"] }
 # For upstream usage
 # salah = { version = "0.8.0" }
 # For usage before merging upstream
 salah = { git = "https://github.com/N-Hoque/salah", branch = "v0.9.0" }
 # For development purposes only
 # salah = { path = "../salah" }
+chrono = { version = "0.4.31", features = ["serde"] }
+clap = { version = "4.4.12", features = ["derive"] }
+directories-next = "2.0.0"
+log = "0.4.21"
+rand = "0.8.5"
 rodio = "0.17.3"
 serde = { version = "1.0.197", features = ["derive"] }
-serde_yaml = "0.9.32"
-directories-next = "2.0.0"
+serde_yaml = "0.9.34"
 simplelog = "0.12.2"
 thiserror = "1.0.58"
-log = "0.4.21"
 
 [package.metadata.cross.target.aarch64-unknown-linux-gnu]
 image = "adhan-aarch64"
