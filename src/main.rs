@@ -8,6 +8,11 @@ use chrono::Timelike;
 use clap::Parser;
 use salah::{Datelike, Event, Prayer};
 
+const CONFIGURATION_INIT_EXIT_CODE: i32 = 1;
+const CONFIGURATION_CREATE_EXIT_CODE: i32 = 2;
+const CONFIGURATION_READ_EXIT_CODE: i32 = 3;
+const PLAYBACK_EXIT_CODE: i32 = 4;
+
 fn initialise_logging() {
     simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
@@ -17,11 +22,6 @@ fn initialise_logging() {
     )
     .expect("initialising logger");
 }
-
-const CONFIGURATION_INIT_EXIT_CODE: i32 = 1;
-const CONFIGURATION_CREATE_EXIT_CODE: i32 = 2;
-const CONFIGURATION_READ_EXIT_CODE: i32 = 3;
-const PLAYBACK_EXIT_CODE: i32 = 4;
 
 fn main() {
     initialise_logging();
