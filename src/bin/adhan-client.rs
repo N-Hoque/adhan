@@ -20,7 +20,7 @@ fn initialise_logging() {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )
-    .expect("initialising logger");
+    .expect("initializing logger");
 }
 
 fn main() {

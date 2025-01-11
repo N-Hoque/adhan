@@ -1,4 +1,5 @@
 pub mod model;
+pub mod server;
 
 use std::{
     fs::{DirBuilder, File},
@@ -29,9 +30,9 @@ pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
         log::info!("Adhan program initialized!");
         log::info!("To configure:");
         log::info!("- Generate a configuration file using 'adhan generate <METHOD>'");
-        log::info!("- Place Fajr adhan audio file at '{}/fajr.mp3'", audio_path.display());
+        log::info!("- Place Fajr adhan audio files at '{}/fajr'", audio_path.display());
         log::info!(
-            "- Place standard adhan audio file at '{}/normal.mp3'",
+            "- Place standard adhan audio files at '{}/normal'",
             audio_path.display()
         );
     }
@@ -55,7 +56,7 @@ pub fn read_config() -> Result<AdhanParameters, AdhanError> {
     let config_path = config_dir.join(SETTINGS_FILE);
     let file = File::open(config_path).map_err(AdhanError::IO)?;
 
-    serde_yaml::from_reader(file).map_err(AdhanError::Serialisation)
+    serde_yaml::from_reader(file).map_err(AdhanError::Serialization)
 }
 
 pub fn create_config(method: Method) -> Result<(), AdhanError> {
@@ -71,7 +72,7 @@ pub fn create_config(method: Method) -> Result<(), AdhanError> {
             parameters: method.parameters(),
         },
     )
-    .map_err(AdhanError::Serialisation)
+    .map_err(AdhanError::Serialization)
 }
 
 pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
