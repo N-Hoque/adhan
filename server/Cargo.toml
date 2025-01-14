@@ -1,0 +1,35 @@
+[package]
+name = "salah-server"
+version = "1.0.3"
+edition = "2021"
+license = "MIT"
+rust-version = "1.70"
+
+[profile.size]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+strip = "symbols"
+debug = 0
+
+[dependencies]
+# For upstream usage
+# salah = { version = "0.8.0" }
+# For usage before merging upstream
+salah = { git = "https://github.com/N-Hoque/salah", branch = "v0.9.0", features = [
+    "serde",
+] }
+# For development purposes only
+# salah = { path = "../salah", features = ["serde"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+log = "0.4.22"
+serde = { version = "1.0.214", features = ["derive"] }
+rocket = { version = "0.5.1", features = ["json"] }
+
+[package.metadata.cross.target.aarch64-unknown-linux-gnu]
+image = "adhan-aarch64"
+
+[package.metadata.cross.target.armv7-unknown-linux-gnueabihf]
+image = "adhan-armv7"
