@@ -1,3 +1,12 @@
 [workspace]
 members = ["client", "server"]
 resolver = "2"
+
+[profile.size]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+strip = "symbols"
+debug = 0

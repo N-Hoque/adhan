@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
-use chrono::{Date, NaiveDate};
+use chrono::NaiveDate;
 use rocket::{
     form::{Form, Strict},
     get, post,
@@ -8,7 +8,7 @@ use rocket::{
     time::util::is_leap_year,
     FromForm, FromFormField,
 };
-use salah::{Coordinates, DateTime, Datelike, TimeZone, Times, Utc};
+use salah::{Coordinates, Datelike, TimeZone, Times, Utc};
 use serde::Serialize;
 
 #[derive(Default, Debug, Clone, Copy, FromFormField)]
@@ -119,7 +119,7 @@ pub fn new_current_timetable(parameters: Option<Form<FormParameters>>) -> Result
     })
 }
 
-#[post("/times/<day>", data = "<parameters>")]
+#[post("/times/day/<day>", data = "<parameters>")]
 pub fn new_daily_timetable(day: u8, parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
     let mut real_parameters = None;
     if let Some(parameters) = parameters {
@@ -174,7 +174,7 @@ pub fn new_current_month_timetable(parameters: Option<Form<FormParameters>>) -> 
 pub fn new_monthly_timetable(
     month: u8,
     parameters: Option<Form<FormParameters>>,
-) -> Result<Json<Vec<Timetable>>, String> {
+) -> Result<Json<MonthResponse>, String> {
     let current_date = Utc::now()
         .with_month(month as u32)
         .ok_or_else(|| format!("month should be between 1-12, got {}", month))?;
@@ -195,17 +195,18 @@ pub fn new_monthly_timetable(
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
-        Json(
-            days.iter()
-                .map(|day| Timetable {
-                    fajr: day.fajr().time(),
-                    dhuhr: day.dhuhr().time(),
-                    asr: day.asr().time(),
-                    maghrib: day.maghrib().time(),
-                    isha: day.isha().time(),
-                })
-                .collect(),
-        )
+        Json(MonthResponse {
+            days: {
+                let mut m = BTreeMap::new();
+                for d in &days {
+                    m.entry(d.asr().date_naive())
+                        .or_insert_with(|| map_times_to_timetable(d));
+                }
+                m
+            },
+            current_date: Utc::now().date_naive(),
+            total_days: max_days,
+        })
     })
 }
 
@@ -213,12 +214,12 @@ pub fn new_monthly_timetable(
 pub fn new_monthly_timetable_short_str(
     month: &str,
     parameters: Option<Form<FormParameters>>,
-) -> Result<Json<Vec<Timetable>>, String> {
+) -> Result<Json<MonthResponse>, String> {
     let month = short_month_to_int(month)?;
 
     let current_date = Utc::now()
         .with_month(month as u32)
-        .ok_or_else(|| format!("month should be between 1-12, got {}", month))?;
+        .ok_or_else(|| format!("invalid short month name, got {}", month))?;
     let max_days = match current_date.month() {
         2 if is_leap_year(current_date.year()) => 29,
         2 => 28,
@@ -236,17 +237,18 @@ pub fn new_monthly_timetable_short_str(
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
-        Json(
-            days.iter()
-                .map(|day| Timetable {
-                    fajr: day.fajr().time(),
-                    dhuhr: day.dhuhr().time(),
-                    asr: day.asr().time(),
-                    maghrib: day.maghrib().time(),
-                    isha: day.isha().time(),
-                })
-                .collect(),
-        )
+        Json(MonthResponse {
+            days: {
+                let mut m = BTreeMap::new();
+                for d in &days {
+                    m.entry(d.asr().date_naive())
+                        .or_insert_with(|| map_times_to_timetable(d));
+                }
+                m
+            },
+            current_date: Utc::now().date_naive(),
+            total_days: max_days,
+        })
     })
 }
 
@@ -254,12 +256,12 @@ pub fn new_monthly_timetable_short_str(
 pub fn new_monthly_timetable_str(
     month: &str,
     parameters: Option<Form<FormParameters>>,
-) -> Result<Json<Vec<Timetable>>, String> {
-    let month = short_month_to_int(month)?;
+) -> Result<Json<MonthResponse>, String> {
+    let month = month_to_int(month)?;
 
     let current_date = Utc::now()
         .with_month(month as u32)
-        .ok_or_else(|| format!("month should be between 1-12, got {}", month))?;
+        .ok_or_else(|| format!("invalid month name, got {}", month))?;
     let max_days = match current_date.month() {
         2 if is_leap_year(current_date.year()) => 29,
         2 => 28,
@@ -277,17 +279,18 @@ pub fn new_monthly_timetable_str(
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
-        Json(
-            days.iter()
-                .map(|day| Timetable {
-                    fajr: day.fajr().time(),
-                    dhuhr: day.dhuhr().time(),
-                    asr: day.asr().time(),
-                    maghrib: day.maghrib().time(),
-                    isha: day.isha().time(),
-                })
-                .collect(),
-        )
+        Json(MonthResponse {
+            days: {
+                let mut m = BTreeMap::new();
+                for d in &days {
+                    m.entry(d.asr().date_naive())
+                        .or_insert_with(|| map_times_to_timetable(d));
+                }
+                m
+            },
+            current_date: Utc::now().date_naive(),
+            total_days: max_days,
+        })
     })
 }
 
