@@ -1,6 +1,6 @@
 use rocket::{launch, routes};
 
-use salah_server::server::{
+use salah_server::server::routes::{
     index, new_current_month_timetable, new_current_timetable, new_daily_timetable, new_monthly_timetable,
     new_monthly_timetable_short_str, new_monthly_timetable_str,
 };
