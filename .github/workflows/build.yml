@@ -13,13 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Cache system dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libasound2 libasound2-dev
           version: 1.0
-      - name: Checkout repository
-        uses: actions/checkout@v4
       - uses: actions-rs/cargo@v1
         with:
           command: build

@@ -7,6 +7,7 @@ help() {
 	echo USAGE:
 	echo "./compile.sh -t 2 -u test -i 192.168.1.96 -d (Build for Raspberry PI 2 and deploy to the PI at IP 192.168.1.96 for test user)"
 	echo "./compile.sh -t 3 -u test -i 192.168.1.96 -d (Same as above but build and deploy for Raspberry PI 3)"
+	exit 0
 }
 
 while getopts t:u:i:d:h flag; do
@@ -21,19 +22,14 @@ while getopts t:u:i:d:h flag; do
 done
 
 if [[ $PI_TARGET -gt 2 ]]; then
-	TARGET_IMAGE=adhan-aarch64
-	TARGET_DOCKERFILE=Dockerfile_RPI3
 	TARGET_ARCH=aarch64-unknown-linux-gnu
 elif [[ $PI_TARGET -eq 2 ]]; then
-	TARGET_IMAGE=adhan-armv7
-	TARGET_DOCKERFILE=Dockerfile_RPI2
 	TARGET_ARCH=armv7-unknown-linux-gnueabihf
 else
 	echo "Sorry, this program doesn't currently support the Raspberry PI 0/1"
 	exit 2
 fi
 
-docker build -t ${TARGET_IMAGE} -f ${TARGET_DOCKERFILE} .
 cross build --profile size --target ${TARGET_ARCH}
 
 if [ -n "$DEPLOY" ]; then

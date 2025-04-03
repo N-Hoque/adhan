@@ -15,26 +15,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Load image cache
-        id: cache-load
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.image-cache-armv7
-          key: image-cache-armv7
-      - name: Prepare image builder
-        uses: docker/setup-buildx-action@v3
-        if: steps.cache-load.outputs.cache-hit != 'true'
-      - name: Build image (for Raspberry PIarmv7)
-        uses: docker/build-push-action@v6
-        with:
-          load: true
-          tags: |
-            adhan-armv7:latest
-            localhost/adhan-armv7:latest
-          cache-from: type=local,src=/tmp/.image-cache-armv7
-          cache-to: type=local,dest=/tmp/.image-cache-armv7
-          file: Dockerfile_RPI2
-        if: steps.cache-load.outputs.cache-hit != 'true'
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -45,4 +25,3 @@ jobs:
           use-cross: true
           command: build
           args: --target armv7-unknown-linux-gnueabihf --profile size
-        
