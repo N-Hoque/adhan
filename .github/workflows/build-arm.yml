@@ -1,4 +1,4 @@
-name: Build Adhan (ARMv8)
+name: Build Adhan (ARM)
 
 on:
   push:
@@ -11,6 +11,9 @@ env:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        arm-arch: [armv7-unknown-linux-gnueabihf, aarch64-unknown-linux-gnu]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -18,10 +21,10 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: aarch64-unknown-linux-gnu
+          target: ${{ matrix.arm-arch }}
           override: true
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --target aarch64-unknown-linux-gnu --profile size
+          args: --target ${{ matrix.arm-arch }} --profile size
