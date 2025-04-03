@@ -1,0 +1,13 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: salah-service
+  namespace: salah
+spec:
+  selector:
+    name: server
+  type: ClusterIP
+  ports:
+    - name: server
+      port: 8000
+      targetPort: 8000

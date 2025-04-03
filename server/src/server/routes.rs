@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use rocket::{form::Form, get, post, serde::json::Json, time::util::is_leap_year};
+use rocket::{form::Form, get, post, response::Redirect, serde::json::Json, time::util::is_leap_year, uri};
 use salah::{Coordinates, Datelike, TimeZone, Times, Utc};
 
 use crate::server::model::DayResponse;
@@ -30,7 +30,7 @@ fn new_timetable_by_day(day: u8, parameters: Option<Parameters>) -> Result<Times
 }
 
 #[post("/times/now", data = "<parameters>")]
-pub fn new_current_timetable(parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
+pub fn times_now(parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
     println!("{:?}", parameters);
     let mut schedule = salah::Schedule::<Utc>::now();
     let mut s = &mut schedule;
@@ -50,8 +50,13 @@ pub fn new_current_timetable(parameters: Option<Form<FormParameters>>) -> Result
     })
 }
 
+#[post("/times/today", data = "<parameters>")]
+pub fn times_today(parameters: Option<Form<FormParameters>>) -> Redirect {
+    Redirect::permanent(uri!(times_now))
+}
+
 #[post("/times/day/<day>", data = "<parameters>")]
-pub fn new_daily_timetable(day: u8, parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
+pub fn times_day(day: u8, parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
     let mut real_parameters = None;
     if let Some(parameters) = parameters {
         real_parameters = Some(Parameters::from(parameters));
@@ -67,7 +72,7 @@ pub fn new_daily_timetable(day: u8, parameters: Option<Form<FormParameters>>) ->
 }
 
 #[post("/times/month", data = "<parameters>")]
-pub fn new_current_month_timetable(parameters: Option<Form<FormParameters>>) -> Result<Json<MonthResponse>, String> {
+pub fn times_month(parameters: Option<Form<FormParameters>>) -> Result<Json<MonthResponse>, String> {
     let current_date = Utc::now();
     let max_days = match current_date.month() {
         2 if is_leap_year(current_date.year()) => 29,
@@ -102,7 +107,7 @@ pub fn new_current_month_timetable(parameters: Option<Form<FormParameters>>) -> 
 }
 
 #[post("/times/month/<month>", data = "<parameters>")]
-pub fn new_monthly_timetable(
+pub fn times_month_month(
     month: u8,
     parameters: Option<Form<FormParameters>>,
 ) -> Result<Json<MonthResponse>, String> {
@@ -142,57 +147,22 @@ pub fn new_monthly_timetable(
 }
 
 #[post("/times/month/<month>", data = "<parameters>", rank = 2)]
-pub fn new_monthly_timetable_short_str(
+pub fn times_month_month_str(
     month: &str,
     parameters: Option<Form<FormParameters>>,
 ) -> Result<Json<MonthResponse>, String> {
-    let month = short_month_to_int(month)?;
+    let long_month = month_to_int(month);
+    let short_month = short_month_to_int(month);
+
+    let month = match (long_month, short_month) {
+        (Some(long), _) => long,
+        (_, Some(short)) => short,
+        (None, None) => return Err(format!("{} is not a valid month name", month)),
+    };
 
     let current_date = Utc::now()
         .with_month(month as u32)
         .ok_or_else(|| format!("invalid short month name, got {}", month))?;
-    let max_days = match current_date.month() {
-        2 if is_leap_year(current_date.year()) => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    };
-
-    let mut real_parameters = None;
-    if let Some(parameters) = parameters {
-        real_parameters = Some(Parameters::from(parameters));
-    };
-
-    let days = (1..=max_days)
-        .map(|d| new_timetable_by_day(d, real_parameters.clone()))
-        .collect::<Result<Vec<Times<Utc>>, String>>();
-
-    days.map(|days| {
-        Json(MonthResponse {
-            days: {
-                let mut m = BTreeMap::new();
-                for d in &days {
-                    m.entry(d.asr().date_naive())
-                        .or_insert_with(|| map_times_to_timetable(d));
-                }
-                m
-            },
-            current_date: Utc::now().date_naive(),
-            total_days: max_days,
-        })
-    })
-}
-
-#[post("/times/month/<month>", data = "<parameters>", rank = 3)]
-pub fn new_monthly_timetable_str(
-    month: &str,
-    parameters: Option<Form<FormParameters>>,
-) -> Result<Json<MonthResponse>, String> {
-    let month = month_to_int(month)?;
-
-    let current_date = Utc::now()
-        .with_month(month as u32)
-        .ok_or_else(|| format!("invalid month name, got {}", month))?;
     let max_days = match current_date.month() {
         2 if is_leap_year(current_date.year()) => 29,
         2 => 28,
@@ -235,7 +205,7 @@ fn map_times_to_timetable<Tz: TimeZone>(times: &Times<Tz>) -> Timetable {
     }
 }
 
-fn short_month_to_int(month: &str) -> Result<u8, String> {
+fn short_month_to_int(month: &str) -> Option<u8> {
     let month = match month.to_lowercase().as_str() {
         "jan" => 1,
         "feb" => 2,
@@ -249,13 +219,13 @@ fn short_month_to_int(month: &str) -> Result<u8, String> {
         "oct" => 10,
         "nov" => 11,
         "dec" => 12,
-        _ => return Err(format!("invalid short month name: {}", month)),
+        _ => return None,
     };
 
-    Ok(month)
+    Some(month)
 }
 
-fn month_to_int(month: &str) -> Result<u8, String> {
+fn month_to_int(month: &str) -> Option<u8> {
     let month = match month.to_lowercase().as_str() {
         "january" => 1,
         "february" => 2,
@@ -269,26 +239,8 @@ fn month_to_int(month: &str) -> Result<u8, String> {
         "october" => 10,
         "november" => 11,
         "december" => 12,
-        _ => return Err(format!("invalid month name: {}", month)),
+        _ => return None,
     };
 
-    Ok(month)
-}
-
-fn month_num_to_name(month: u8) -> &'static str {
-    match month {
-        1 => "January",
-        2 => "Feburary",
-        3 => "March",
-        4 => "April",
-        5 => "May",
-        6 => "June",
-        7 => "July",
-        8 => "August",
-        9 => "September",
-        10 => "October",
-        11 => "November",
-        12 => "December",
-        _ => unreachable!(),
-    }
+    Some(month)
 }

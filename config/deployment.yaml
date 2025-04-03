@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: salah
+  labels:
+    name: server
+spec:
+  selector:
+    matchLabels:
+      name: server
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: server
+    spec:
+      containers:
+        - name: server
+          image: localhost/nhoque/salah-server:dev-alpine
+          env:
+            - name: PROFILE
+              value: DEBUG
+          resources:
+            limits:
+              cpu: "10m"
+              memory: "16M"
+          ports:
+            - containerPort: 8000
+              name: server
+          imagePullPolicy: IfNotPresent

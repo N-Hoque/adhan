@@ -2,19 +2,20 @@
 
 set -e
 
-# This script is used to compile (and optionally deploy) the Adhan player for a specific ARM architecture
+help() {
+	echo "This script is used to compile (and optionally deploy) the Adhan player for a specific ARM architecture"
+	echo USAGE:
+	echo "./compile.sh -t 2 -u test -i 192.168.1.96 -d (Build for Raspberry PI 2 and deploy to the PI at IP 192.168.1.96 for test user)"
+	echo "./compile.sh -t 3 -u test -i 192.168.1.96 -d (Same as above but build and deploy for Raspberry PI 3)"
+}
 
-# USAGE:
-
-# ./compile.sh -t 2 -u test -a 192.168.1.96 -d (Build for Raspberry PI 2 and deploy to the PI at IP 192.168.1.96 for test user)
-# ./compile.sh -t 3 -u test -a 192.168.1.96 -d (Same as above but build and deploy for Raspberry PI 3)
-
-while getopts t:u:a:d flag; do
+while getopts t:u:i:d:h flag; do
 	case "${flag}" in
 	t) PI_TARGET=${OPTARG} ;;
 	u) USER=${OPTARG} ;;
-	a) IP=${OPTARG} ;;
+	i) IP=${OPTARG} ;;
 	d) DEPLOY="1" ;;
+	h) help ;;
 	*) ;;
 	esac
 done
