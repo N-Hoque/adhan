@@ -1,13 +1,9 @@
 use std::collections::BTreeMap;
 
 use chrono::NaiveDate;
-use rocket::{
-    form::{Form, Strict},
-    FromForm, FromFormField,
-};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Clone, Copy, FromFormField)]
+#[derive(Default, Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum Madhab {
     #[default]
     Shafi,
@@ -23,30 +19,12 @@ impl From<Madhab> for salah::Madhab {
     }
 }
 
-#[derive(Debug, FromForm)]
-pub struct FormParameters {
-    pub(crate) latitude: Strict<f64>,
-    pub(crate) longitude: Strict<f64>,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Parameters {
+    pub latitude: f64,
+    pub longitude: f64,
 
-    pub(crate) madhab: Madhab,
-}
-
-#[derive(Clone)]
-pub(crate) struct Parameters {
-    pub(crate) latitude: f64,
-    pub(crate) longitude: f64,
-
-    pub(crate) madhab: Madhab,
-}
-
-impl From<Form<FormParameters>> for Parameters {
-    fn from(value: Form<FormParameters>) -> Self {
-        Self {
-            latitude: *value.latitude,
-            longitude: *value.longitude,
-            madhab: value.madhab,
-        }
-    }
+    pub madhab: Madhab,
 }
 
 #[derive(Serialize)]

@@ -5,7 +5,7 @@ use salah::{Coordinates, Datelike, TimeZone, Times, Utc};
 
 use crate::server::model::DayResponse;
 
-use super::model::{FormParameters, MonthResponse, Parameters, Timetable};
+use super::model::{MonthResponse, Parameters, Timetable};
 
 #[get("/")]
 pub fn index() -> &'static str {
@@ -29,19 +29,18 @@ fn new_timetable_by_day(day: u8, parameters: Option<Parameters>) -> Result<Times
     schedule.build()
 }
 
-#[post("/times/now", data = "<parameters>")]
-pub fn times_now(parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
+#[post("/times/now", format = "json", data = "<parameters>")]
+pub fn times_now(parameters: Json<Option<Parameters>>) -> Result<Json<DayResponse>, String> {
     println!("{:?}", parameters);
-    let mut schedule = salah::Schedule::<Utc>::now();
-    let mut s = &mut schedule;
-    if let Some(parameters) = parameters {
-        s = s
-            .with_coordinates(Coordinates::new(*parameters.latitude, *parameters.longitude))
+    let mut schedule = &mut salah::Schedule::<Utc>::now();
+    if let Some(parameters) = parameters.0 {
+        schedule = schedule
+            .with_coordinates(Coordinates::new(parameters.latitude, parameters.longitude))
             .with_parameters(
                 salah::Parameters::from_method(salah::Method::MuslimWorldLeague).with_madhab(parameters.madhab.into()),
             );
     }
-    s.build().map(|t| {
+    schedule.build().map(|t| {
         Json(DayResponse {
             timetable: map_times_to_timetable(&t),
             current_date: t.asr().date_naive(),
@@ -50,19 +49,14 @@ pub fn times_now(parameters: Option<Form<FormParameters>>) -> Result<Json<DayRes
     })
 }
 
-#[post("/times/today", data = "<parameters>")]
-pub fn times_today(parameters: Option<Form<FormParameters>>) -> Redirect {
-    Redirect::permanent(uri!(times_now))
+#[post("/times/today", format = "json", data = "<parameters>")]
+pub fn times_today(parameters: Json<Option<Parameters>>) -> Redirect {
+    Redirect::temporary(uri!(times_now))
 }
 
-#[post("/times/day/<day>", data = "<parameters>")]
-pub fn times_day(day: u8, parameters: Option<Form<FormParameters>>) -> Result<Json<DayResponse>, String> {
-    let mut real_parameters = None;
-    if let Some(parameters) = parameters {
-        real_parameters = Some(Parameters::from(parameters));
-    };
-
-    new_timetable_by_day(day, real_parameters).map(|t| {
+#[post("/times/day/<day>", format = "json", data = "<parameters>")]
+pub fn times_day(day: u8, parameters: Json<Option<Parameters>>) -> Result<Json<DayResponse>, String> {
+    new_timetable_by_day(day, parameters.0).map(|t| {
         Json(DayResponse {
             timetable: map_times_to_timetable(&t),
             current_date: t.asr().date_naive(),
@@ -71,8 +65,8 @@ pub fn times_day(day: u8, parameters: Option<Form<FormParameters>>) -> Result<Js
     })
 }
 
-#[post("/times/month", data = "<parameters>")]
-pub fn times_month(parameters: Option<Form<FormParameters>>) -> Result<Json<MonthResponse>, String> {
+#[post("/times/month", format = "json", data = "<parameters>")]
+pub fn times_month(parameters: Json<Option<Parameters>>) -> Result<Json<MonthResponse>, String> {
     let current_date = Utc::now();
     let max_days = match current_date.month() {
         2 if is_leap_year(current_date.year()) => 29,
@@ -81,13 +75,8 @@ pub fn times_month(parameters: Option<Form<FormParameters>>) -> Result<Json<Mont
         _ => 31,
     };
 
-    let mut real_parameters = None;
-    if let Some(parameters) = parameters {
-        real_parameters = Some(Parameters::from(parameters));
-    };
-
     let days = (1..=max_days)
-        .map(|d| new_timetable_by_day(d, real_parameters.clone()))
+        .map(|d| new_timetable_by_day(d, parameters.0.clone()))
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
@@ -106,11 +95,8 @@ pub fn times_month(parameters: Option<Form<FormParameters>>) -> Result<Json<Mont
     })
 }
 
-#[post("/times/month/<month>", data = "<parameters>")]
-pub fn times_month_month(
-    month: u8,
-    parameters: Option<Form<FormParameters>>,
-) -> Result<Json<MonthResponse>, String> {
+#[post("/times/month/<month>", format = "json", data = "<parameters>")]
+pub fn times_month_month(month: u8, parameters: Json<Option<Parameters>>) -> Result<Json<MonthResponse>, String> {
     let current_date = Utc::now()
         .with_month(month as u32)
         .ok_or_else(|| format!("month should be between 1-12, got {}", month))?;
@@ -121,13 +107,8 @@ pub fn times_month_month(
         _ => 31,
     };
 
-    let mut real_parameters = None;
-    if let Some(parameters) = parameters {
-        real_parameters = Some(Parameters::from(parameters));
-    };
-
     let days = (1..=max_days)
-        .map(|d| new_timetable_by_day(d, real_parameters.clone()))
+        .map(|d| new_timetable_by_day(d, parameters.0.clone()))
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
@@ -146,11 +127,8 @@ pub fn times_month_month(
     })
 }
 
-#[post("/times/month/<month>", data = "<parameters>", rank = 2)]
-pub fn times_month_month_str(
-    month: &str,
-    parameters: Option<Form<FormParameters>>,
-) -> Result<Json<MonthResponse>, String> {
+#[post("/times/month/<month>", format = "json", data = "<parameters>", rank = 2)]
+pub fn times_month_month_str(month: &str, parameters: Json<Option<Parameters>>) -> Result<Json<MonthResponse>, String> {
     let long_month = month_to_int(month);
     let short_month = short_month_to_int(month);
 
@@ -170,13 +148,8 @@ pub fn times_month_month_str(
         _ => 31,
     };
 
-    let mut real_parameters = None;
-    if let Some(parameters) = parameters {
-        real_parameters = Some(Parameters::from(parameters));
-    };
-
     let days = (1..=max_days)
-        .map(|d| new_timetable_by_day(d, real_parameters.clone()))
+        .map(|d| new_timetable_by_day(d, parameters.0.clone()))
         .collect::<Result<Vec<Times<Utc>>, String>>();
 
     days.map(|days| {
