@@ -18,13 +18,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - uses: taiki-e/install-action@v2
+      - name: Prepare cargo cache
+        uses: actions/cache@v4
+        with:
+          key: cargo-cache-${{matrix.arm-arch}}
+          path: /home/runner/.cargo
+      - name: Prepare target cache
+        uses: actions/cache@v4
+        with:
+          key: target-cache-${{matrix.arm-arch}}
+          path: target
+      - name: Install cross
+        uses: taiki-e/install-action@v2
         with:
           tool: cross
-      - uses: actions-rs/toolchain@v1
+      - name: Set build toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: ${{ matrix.arm-arch }}
           override: true
-      - uses: Swatinem/rust-cache@v2
-      - run: cross build --target ${{ matrix.arm-arch }} --profile size
+      - name: Build binary
+        run: cross build --target ${{ matrix.arm-arch }} --profile size

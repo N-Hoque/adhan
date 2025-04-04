@@ -20,7 +20,18 @@ jobs:
         with:
           packages: libasound2 libasound2-dev
           version: 1.0
-      - uses: actions-rs/cargo@v1
+      - name: Prepare cargo cache
+        uses: actions/cache@v4
+        with:
+          key: cargo-cache
+          path: /home/runner/.cargo
+      - name: Prepare target cache
+        uses: actions/cache@v4
+        with:
+          key: target-cache
+          path: target
+      - name: Build binary
+        uses: actions-rs/cargo@v1
         with:
           command: build
           args: --profile size
