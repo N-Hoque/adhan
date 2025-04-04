@@ -1,7 +1,5 @@
 [target.armv7-unknown-linux-gnueabihf]
 image = "adhan-armv7"
-dockerfile = "ARMv7.Dockerfile"
 
 [target.aarch64-unknown-linux-gnu]
 image = "adhan-arm64"
-dockerfile = "ARM64.Dockerfile"

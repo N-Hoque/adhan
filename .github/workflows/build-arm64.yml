@@ -54,6 +54,7 @@ jobs:
           tags: |
             adhan-arm64:latest
             localhost/adhan-arm64:latest
+            docker.io/library/adhan-arm64:latest
           load: true
       - name: Build binary
         run: cross build --target aarch64-unknown-linux-gnu --profile size

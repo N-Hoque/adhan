@@ -54,6 +54,7 @@ jobs:
           tags: |
             adhan-armv7:latest
             localhost/adhan-armv7:latest
+            docker.io/library/adhan-armv7:latest
           load: true
       - name: Build binary
         run: cross build --target armv7-unknown-linux-gnueabihf --profile size
