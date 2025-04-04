@@ -1,0 +1,7 @@
+FROM ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest
+
+ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+
+RUN dpkg --add-architecture armhf
+RUN apt update && apt upgrade -y
+RUN apt install -y libasound2:armhf libasound2-dev:armhf gcc-arm-linux-gnueabihf

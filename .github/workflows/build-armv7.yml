@@ -1,0 +1,59 @@
+name: Build Adhan (ARMv7)
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare image cache
+        uses: actions/cache@v4
+        with:
+          key: image-cache-armv7-unknown-linux-gnueabihf
+          path: /tmp/.image-cache-armv7-unknown-linux-gnueabihf
+      - name: Prepare cargo cache
+        uses: actions/cache@v4
+        with:
+          key: cargo-cache-armv7-unknown-linux-gnueabihf
+          path: /home/runner/.cargo
+      - name: Prepare target cache
+        uses: actions/cache@v4
+        with:
+          key: target-cache-armv7-unknown-linux-gnueabihf
+          path: target
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - name: Set build toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: armv7-unknown-linux-gnueabihf
+          override: true
+      - name: Setup image builder
+        id: image-builder
+        uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          builder: ${{ steps.image-builder.outputs.name }}
+          cache-from: "type=local,src=/tmp/.image-cache-armv7-unknown-linux-gnueabihf"
+          cache-to: "type=local,dest=/tmp/.image-cache-armv7-unknown-linux-gnueabihf"
+          file: ARMv7.Dockerfile
+          tags: |
+            adhan-armv7:latest
+            localhost/adhan-armv7:latest
+          load: true
+      - name: Build binary
+        run: cross build --target armv7-unknown-linux-gnueabihf --profile size
