@@ -1,0 +1,48 @@
+services:
+  api:
+    build:
+      dockerfile: AdhanServer.Dockerfile
+      context: server
+    ports:
+      - "8000:8000"
+    networks:
+      - server
+    volumes:
+      - ./target/size/salah-server:/app/salah:ro
+  proxy:
+    image: "nginx"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - server
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_var:/var/lib/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - ./proxy.conf:/etc/nginx/nginx.conf:ro
+      - ./hoqueserver-local.crt:/etc/nginx/certs/hoqueserver-local.crt:ro
+      - ./hoqueserver-local.key:/etc/nginx/certs/hoqueserver-local.key:ro
+    depends_on:
+      - api
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    networks:
+      - server
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_www:/var/www/certbot
+    command: certonly --non-interactive --webroot -w /var/www/certbot --agree-tos --no-eff-email -d dev.salah-timetable.com
+    depends_on:
+      - proxy
+
+networks:
+  server:
+    driver: bridge
+
+volumes:
+  letsencrypt:
+  certbot_var:
+  certbot_www:
