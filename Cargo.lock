@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "adhan"
-version = "1.0.3"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1729,7 +1729,7 @@ dependencies = [
 
 [[package]]
 name = "salah-server"
-version = "1.0.3"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "log",

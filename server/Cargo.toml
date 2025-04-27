@@ -1,6 +1,6 @@
 [package]
 name = "salah-server"
-version = "1.0.3"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.70"

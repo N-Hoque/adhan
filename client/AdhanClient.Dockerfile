@@ -8,4 +8,4 @@ RUN apt update && \
 
 WORKDIR /app
 
-CMD ["/app/salah"]
+CMD ["/app/adhan"]
