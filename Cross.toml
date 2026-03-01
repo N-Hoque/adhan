@@ -1,0 +1,23 @@
+# Cross.toml
+# ----------
+# Configuration for `cross` (https://github.com/cross-rs/cross).
+#
+# rodio depends on cpal which requires the ALSA development headers on Linux.
+# The standard cross images are Ubuntu 20.04-based, so we use pre-build hooks
+# to install libasound2-dev for the correct multiarch target inside the
+# container before the Rust build starts.
+#
+# CROSS_DEB_ARCH is automatically set by cross to the Debian architecture name
+# for the current target (e.g. "arm64" for aarch64, "armhf" for armv7).
+
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update && apt-get install -y --no-install-recommends libasound2-dev:$CROSS_DEB_ARCH",
+]
+
+[target.armv7-unknown-linux-gnueabihf]
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update && apt-get install -y --no-install-recommends libasound2-dev:$CROSS_DEB_ARCH",
+]
