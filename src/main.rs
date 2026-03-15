@@ -1,12 +1,13 @@
-use std::{io::Write, thread::sleep, time::Duration};
+use std::{thread::sleep, time::Duration};
 
 use adhan::{
-    create_config, initialize_user_config_directory, list_audio_devices, list_audio_hosts, new_timetable, play_adhan,
-    read_config, AdhanCommands, AdhanListSubcommand,
+    build_prayer_queue, create_config, initialize_user_config_directory, list_audio_devices, list_audio_hosts,
+    new_timetable, play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
 };
 
+use chrono::{Datelike, Local, TimeZone};
 use clap::Parser;
-use salah::{Datelike, Event, Prayer};
+use salah::{Event, Prayer};
 
 const CONFIGURATION_INIT_EXIT_CODE: i32 = 1;
 const CONFIGURATION_CREATE_EXIT_CODE: i32 = 2;
@@ -64,8 +65,7 @@ fn main() {
             }
             Ok(parameters) => {
                 let timetable = new_timetable(&parameters);
-
-                let current_time = chrono::Local::now();
+                let current_time = Local::now();
                 println!("{}", timetable.display(&current_time));
             }
         },
@@ -75,59 +75,78 @@ fn main() {
                 std::process::exit(CONFIGURATION_READ_EXIT_CODE);
             }
             Ok(parameters) => {
-                let mut timetable = new_timetable(&parameters);
-
                 log::info!("Started Adhan!");
 
-                loop {
-                    let current_time = chrono::Local::now();
-                    let expected_prayers = timetable.expected(&current_time);
-                    let next_event = expected_prayers.next_event();
-                    let next_time = *expected_prayers.next_time();
-                    let event_name = if current_time.weekday() == chrono::Weekday::Fri {
-                        next_event.friday_name()
+                'day: loop {
+                    let timetable = new_timetable(&parameters);
+                    let mut queue = build_prayer_queue(&timetable);
+
+                    // Drop any prayers that have already passed.
+                    let now = Local::now();
+                    queue.retain(|(time, _)| *time > now);
+
+                    if queue.is_empty() {
+                        log::info!("All prayers for {} have already passed.", now.format("%A, %-d %B %Y"));
                     } else {
-                        next_event.name()
-                    };
+                        log::info!(
+                            "Loaded timetable for {}. {} prayer(s) remaining today.",
+                            now.format("%A, %-d %B %Y"),
+                            queue.len()
+                        );
+                    }
 
-                    // How many seconds until the next event fires.
-                    let secs_until_event = next_time.signed_duration_since(current_time).num_seconds();
+                    // Work through every prayer remaining today.
+                    while let Some((prayer_time, event)) = queue.pop_front() {
+                        let now = Local::now();
+                        let secs = prayer_time.signed_duration_since(now).num_seconds();
 
-                    if secs_until_event <= 0 {
-                        // The event is due now — play and rebuild the timetable.
-                        log::info!("{event_name} is now!");
-                        if let Err(err) = play_adhan(next_event, &audio_device) {
+                        let event_name = if now.weekday() == chrono::Weekday::Fri {
+                            event.friday_name()
+                        } else {
+                            event.name()
+                        };
+
+                        if secs > 0 {
+                            let hours = secs / 3600;
+                            let minutes = (secs % 3600) / 60;
+                            log::info!(
+                                "Next: {} at {} ({}h {}m away) – sleeping",
+                                event_name,
+                                prayer_time.format("%H:%M"),
+                                hours,
+                                minutes,
+                            );
+                            sleep(Duration::from_secs(secs as u64));
+                        }
+
+                        log::info!("{} – playing adhan", event_name);
+                        if let Err(err) = play_adhan(event, &audio_device) {
                             log::error!("{}", err);
                             std::process::exit(PLAYBACK_EXIT_CODE);
                         }
-                        timetable = new_timetable(&parameters);
-                    } else if secs_until_event <= 60 {
-                        // Within the final minute: poll every second for accuracy.
-                        let hours = secs_until_event / 3600;
-                        let minutes = (secs_until_event % 3600) / 60;
-                        let seconds = secs_until_event % 60;
-                        if matches!(next_event, Event::Prayer(_)) {
-                            log::info!("{event_name} prayer starts in: {hours:>2}h {minutes:>2}m {seconds:>2}s");
-                        } else {
-                            log::info!("Waiting for: {hours:>2}h {minutes:>2}m {seconds:>2}s...");
-                        }
-                        let _ = std::io::stdout().flush();
-                        sleep(Duration::from_secs(1));
-                    } else {
-                        // More than a minute away: sleep until 1 minute before
-                        // the event, then the next iteration enters the fine-
-                        // grained polling branch above.
-                        let sleep_secs = (secs_until_event - 60).max(1) as u64;
-                        let hours = secs_until_event / 3600;
-                        let minutes = (secs_until_event % 3600) / 60;
-                        if matches!(next_event, Event::Prayer(_)) {
-                            log::info!("{event_name} prayer starts in: {hours:>2}h {minutes:>2}m – sleeping");
-                        } else {
-                            log::info!("Waiting for: {hours:>2}h {minutes:>2}m – sleeping");
-                        }
-                        let _ = std::io::stdout().flush();
-                        sleep(Duration::from_secs(sleep_secs));
                     }
+
+                    // All prayers done (or already past on startup).
+                    // Sleep until 00:00 of the next calendar day, then
+                    // rebuild the timetable. We deliberately do NOT use
+                    // timetable.midnight(), which is Islamic midnight
+                    // (midpoint of the night), not the calendar boundary.
+                    let now = Local::now();
+                    let next_midnight = {
+                        let tomorrow = (now + chrono::Duration::days(1)).date_naive();
+                        Local
+                            .from_local_datetime(&tomorrow.and_hms_opt(0, 0, 0).unwrap())
+                            .unwrap()
+                    };
+
+                    let secs_to_midnight = next_midnight.signed_duration_since(now).num_seconds();
+                    if secs_to_midnight > 0 {
+                        log::info!("All prayers complete. Sleeping until midnight for new day.");
+                        sleep(Duration::from_secs(secs_to_midnight as u64));
+                    }
+
+                    log::info!("Midnight reached – loading tomorrow's timetable.");
+                    continue 'day;
                 }
             }
         },
