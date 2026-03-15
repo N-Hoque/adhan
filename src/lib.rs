@@ -21,9 +21,21 @@ pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
     if adhan_base_directory().is_ok_and(|dir| !dir.exists()) {
         let audio_path = &adhan_audio_directory()?;
 
+        // Create the base audio directory.
         DirBuilder::new()
             .recursive(true)
             .create(audio_path)
+            .map_err(AdhanError::IO)?;
+
+        // Create expected subdirectories for different adhan types.
+        DirBuilder::new()
+            .recursive(true)
+            .create(audio_path.join("fajr"))
+            .map_err(AdhanError::IO)?;
+
+        DirBuilder::new()
+            .recursive(true)
+            .create(audio_path.join("normal"))
             .map_err(AdhanError::IO)?;
 
         log::info!("Adhan program initialized!");

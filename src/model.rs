@@ -17,7 +17,7 @@ pub enum AdhanAudioError {
 pub enum AdhanError {
     #[error("file IO failure")]
     IO(#[from] std::io::Error),
-    #[error("file IO failure")]
+    #[error("YAML serialization/deserialization failure: {0}")]
     Serialization(#[from] serde_yaml::Error),
     #[error("configuration failure {0}")]
     Configuration(String),
