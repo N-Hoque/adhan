@@ -1,6 +1,7 @@
 pub mod model;
 
 use std::{
+    collections::VecDeque,
     fs::{DirBuilder, File},
     io::BufReader,
     path::PathBuf,
@@ -186,6 +187,18 @@ pub fn new_timetable(parameters: &AdhanParameters) -> Times<Local> {
             log::error!("Failed to calculate prayer times! - {err}");
             std::process::exit(1);
         })
+}
+
+/// Builds an ordered queue of the five daily prayers from a timetable.
+/// Prayers are already in chronological order so no sorting is required.
+pub fn build_prayer_queue(timetable: &Times<Local>) -> VecDeque<(chrono::DateTime<Local>, Event)> {
+    VecDeque::from([
+        (timetable.fajr().clone(), Event::Prayer(Prayer::Fajr)),
+        (timetable.dhuhr().clone(), Event::Prayer(Prayer::Dhuhr)),
+        (timetable.asr().clone(), Event::Prayer(Prayer::Asr)),
+        (timetable.maghrib().clone(), Event::Prayer(Prayer::Maghrib)),
+        (timetable.isha().clone(), Event::Prayer(Prayer::Isha)),
+    ])
 }
 
 fn get_device(device_name: &str) -> Option<Device> {
