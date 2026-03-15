@@ -1,10 +1,10 @@
-use std::io::Write;
+use std::{io::Write, thread::sleep, time::Duration};
 
 use adhan::{
     create_config, initialize_user_config_directory, list_audio_devices, list_audio_hosts, new_timetable, play_adhan,
     read_config, AdhanCommands, AdhanListSubcommand,
 };
-use chrono::Timelike;
+
 use clap::Parser;
 use salah::{Datelike, Event, Prayer};
 
@@ -81,32 +81,53 @@ fn main() {
 
                 loop {
                     let current_time = chrono::Local::now();
-                    let (hours, minutes) = timetable.time_remaining(&current_time);
-                    let seconds = current_time.second();
                     let expected_prayers = timetable.expected(&current_time);
                     let next_event = expected_prayers.next_event();
+                    let next_time = *expected_prayers.next_time();
                     let event_name = if current_time.weekday() == chrono::Weekday::Fri {
                         next_event.friday_name()
                     } else {
                         next_event.name()
                     };
 
-                    if hours == 0 && minutes == 0 {
+                    // How many seconds until the next event fires.
+                    let secs_until_event = next_time.signed_duration_since(current_time).num_seconds();
+
+                    if secs_until_event <= 0 {
+                        // The event is due now — play and rebuild the timetable.
                         log::info!("{event_name} is now!");
                         if let Err(err) = play_adhan(next_event, &audio_device) {
                             log::error!("{}", err);
                             std::process::exit(PLAYBACK_EXIT_CODE);
                         }
                         timetable = new_timetable(&parameters);
-                    } else if ((hours > 0 && minutes == 0) || (hours == 0 && minutes % 5 == 0)) && seconds == 0 {
+                    } else if secs_until_event <= 60 {
+                        // Within the final minute: poll every second for accuracy.
+                        let hours = secs_until_event / 3600;
+                        let minutes = (secs_until_event % 3600) / 60;
+                        let seconds = secs_until_event % 60;
                         if matches!(next_event, Event::Prayer(_)) {
-                            log::info!("{event_name} prayer starts in:{hours:>2}h {minutes:>2}m");
+                            log::info!("{event_name} prayer starts in: {hours:>2}h {minutes:>2}m {seconds:>2}s");
                         } else {
-                            log::info!("Waiting for:{hours:>2}h {minutes:>2}m...");
+                            log::info!("Waiting for: {hours:>2}h {minutes:>2}m {seconds:>2}s...");
                         }
+                        let _ = std::io::stdout().flush();
+                        sleep(Duration::from_secs(1));
+                    } else {
+                        // More than a minute away: sleep until 1 minute before
+                        // the event, then the next iteration enters the fine-
+                        // grained polling branch above.
+                        let sleep_secs = (secs_until_event - 60).max(1) as u64;
+                        let hours = secs_until_event / 3600;
+                        let minutes = (secs_until_event % 3600) / 60;
+                        if matches!(next_event, Event::Prayer(_)) {
+                            log::info!("{event_name} prayer starts in: {hours:>2}h {minutes:>2}m – sleeping");
+                        } else {
+                            log::info!("Waiting for: {hours:>2}h {minutes:>2}m – sleeping");
+                        }
+                        let _ = std::io::stdout().flush();
+                        sleep(Duration::from_secs(sleep_secs));
                     }
-                    let _ = std::io::stdout().flush();
-                    std::thread::sleep(std::time::Duration::from_secs(1));
                 }
             }
         },
