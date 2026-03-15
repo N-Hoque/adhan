@@ -22,6 +22,10 @@ ARG TARGETPLATFORM
 RUN <<EOF
 set -eux
 
+apt-get update
+apt-get install -y --no-install-recommends \
+    pkg-config
+
 case "$TARGETPLATFORM" in
   linux/amd64)
     RUST_TARGET="x86_64-unknown-linux-gnu"
@@ -35,6 +39,7 @@ case "$TARGETPLATFORM" in
     apt-get update
     apt-get install -y --no-install-recommends \
         gcc-aarch64-linux-gnu \
+        libc6-dev-arm64-cross \
         libasound2-dev:arm64
     # Tell the linker to use the arm64 cross-linker
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
@@ -45,6 +50,7 @@ case "$TARGETPLATFORM" in
     apt-get update
     apt-get install -y --no-install-recommends \
         gcc-arm-linux-gnueabihf \
+        libc6-dev-armhf-cross \
         libasound2-dev:armhf
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
     ;;
@@ -54,6 +60,8 @@ case "$TARGETPLATFORM" in
     ;;
 esac
 
+rm -rf /var/lib/apt/lists/*
+
 echo "$RUST_TARGET" > /rust_target.txt
 EOF
 
@@ -62,6 +70,7 @@ EOF
 # that every subsequent step sources.
 RUN <<EOF
 set -eux
+
 RUST_TARGET=$(cat /rust_target.txt)
 
 case "$TARGETPLATFORM" in
@@ -87,33 +96,28 @@ EOF
 
 WORKDIR /build
 
-# Copy the manifest files first so dependency compilation is cached
-# independently of source changes.
+# Copy the manifest and fetch dependencies to cache them.
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && touch src/lib.rs
+RUN cargo fetch --locked
 
-# Build a dummy main so Cargo fetches and compiles all dependencies.
+# Copy the library sources to cache them.
+COPY src/lib.rs ./src/lib.rs
+COPY src/model.rs ./src/model.rs
 RUN <<EOF
 set -eux
 . /env.sh
 RUST_TARGET=$(cat /rust_target.txt)
-mkdir -p src
-echo 'fn main() {}' > src/main.rs
-# Touch lib.rs / model.rs so Cargo doesn't complain about missing files
-touch src/lib.rs src/model.rs
 cargo build --profile size --target "$RUST_TARGET"
-# Remove the dummy artefacts so the real source compilation isn't skipped
-rm -f target/"$RUST_TARGET"/size/adhan* target/"$RUST_TARGET"/size/deps/adhan*
 EOF
 
-# Now copy the real source tree and compile the actual binary.
-COPY src ./src
-
+# Copy the main file to compile the binary.
+COPY src/main.rs ./src/main.rs
 RUN <<EOF
 set -eux
 . /env.sh
 RUST_TARGET=$(cat /rust_target.txt)
 cargo build --profile size --target "$RUST_TARGET"
-# Copy the binary to a fixed location regardless of target triple
 cp target/"$RUST_TARGET"/size/adhan /adhan
 EOF
 
@@ -129,7 +133,6 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libasound2 \
-        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /adhan /usr/local/bin/adhan
