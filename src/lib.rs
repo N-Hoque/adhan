@@ -7,6 +7,8 @@ use std::{
     path::PathBuf,
 };
 
+use chrono::NaiveDate;
+
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanError, AdhanParameters, Method};
 use rand::seq::SliceRandom;
@@ -201,6 +203,19 @@ pub fn build_prayer_queue(timetable: &Times<Local>) -> VecDeque<(chrono::DateTim
     ])
 }
 
+/// Returns the `DateTime<Local>` representing 00:00:00 of the day after `date`.
+///
+/// This is the calendar midnight we sleep to at the end of each day. It is
+/// deliberately *not* `timetable.midnight()`, which is Islamic midnight
+/// (midpoint of the night between Maghrib and Fajr), not the civil boundary.
+pub fn next_midnight_after(date: NaiveDate) -> chrono::DateTime<Local> {
+    use chrono::TimeZone as _;
+    let tomorrow = date.succ_opt().expect("date overflow computing next midnight");
+    Local
+        .from_local_datetime(&tomorrow.and_hms_opt(0, 0, 0).unwrap())
+        .unwrap()
+}
+
 fn get_device(device_name: &str) -> Option<Device> {
     rodio::cpal::default_host()
         .output_devices()
@@ -210,4 +225,158 @@ fn get_device(device_name: &str) -> Option<Device> {
             dev.name()
                 .map_or(None, |name| if name == device_name { Some(dev) } else { None })
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use salah::{Coordinates, Parameters, TimeZone, Times};
+
+    use super::*;
+
+    /// Fixed coordinates and parameters used across all tests.
+    /// London, MoonsightingCommittee — produces well-known, stable times.
+    fn test_timetable() -> Times<Local> {
+        // 2024-03-20 — spring equinox, straightforward prayer times.
+        // We use Local so the returned DateTimes match what the real run loop
+        // works with, making the retain comparisons meaningful.
+        let date = Local.with_ymd_and_hms(2024, 3, 20, 0, 0, 0).unwrap();
+        let coords = Coordinates::new(51.5074, -0.1278); // London
+        let params = Parameters::from_method(salah::Method::MoonsightingCommittee);
+        Times::new(&date, &coords, &params)
+    }
+
+    // ── build_prayer_queue ────────────────────────────────────────────────────
+
+    #[test]
+    fn queue_contains_exactly_five_prayers() {
+        let timetable = test_timetable();
+        let queue = build_prayer_queue(&timetable);
+        assert_eq!(queue.len(), 5);
+    }
+
+    #[test]
+    fn queue_events_are_correct_prayers_in_order() {
+        use salah::Prayer;
+        let timetable = test_timetable();
+        let queue = build_prayer_queue(&timetable);
+        let events: Vec<Event> = queue.into_iter().map(|(_, e)| e).collect();
+        assert_eq!(
+            events,
+            vec![
+                Event::Prayer(Prayer::Fajr),
+                Event::Prayer(Prayer::Dhuhr),
+                Event::Prayer(Prayer::Asr),
+                Event::Prayer(Prayer::Maghrib),
+                Event::Prayer(Prayer::Isha),
+            ]
+        );
+    }
+
+    #[test]
+    fn queue_times_are_strictly_ascending() {
+        let timetable = test_timetable();
+        let queue = build_prayer_queue(&timetable);
+        let times: Vec<_> = queue.into_iter().map(|(t, _)| t).collect();
+        for window in times.windows(2) {
+            assert!(
+                window[0] < window[1],
+                "times are not ascending: {:?} >= {:?}",
+                window[0],
+                window[1]
+            );
+        }
+    }
+
+    // ── retain (mid-day filtering) ────────────────────────────────────────────
+
+    #[test]
+    fn retain_keeps_all_prayers_when_all_are_in_the_future() {
+        let timetable = test_timetable();
+        let mut queue = build_prayer_queue(&timetable);
+        // Use a time before Fajr — all five should survive.
+        let before_fajr = timetable.fajr().clone() - chrono::Duration::hours(1);
+        queue.retain(|(t, _)| *t > before_fajr);
+        assert_eq!(queue.len(), 5);
+    }
+
+    #[test]
+    fn retain_drops_all_prayers_when_all_are_in_the_past() {
+        let timetable = test_timetable();
+        let mut queue = build_prayer_queue(&timetable);
+        // Use a time after Isha — none should survive.
+        let after_isha = timetable.isha().clone() + chrono::Duration::hours(1);
+        queue.retain(|(t, _)| *t > after_isha);
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn retain_keeps_only_future_prayers_mid_day() {
+        use salah::Prayer;
+        let timetable = test_timetable();
+        let mut queue = build_prayer_queue(&timetable);
+        // Simulate being between Asr and Maghrib — should keep Maghrib and Isha.
+        let between_asr_and_maghrib = *timetable.asr() + chrono::Duration::minutes(30);
+        queue.retain(|(t, _)| *t > between_asr_and_maghrib);
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue[0].1, Event::Prayer(Prayer::Maghrib));
+        assert_eq!(queue[1].1, Event::Prayer(Prayer::Isha));
+    }
+
+    #[test]
+    fn retain_keeps_only_isha_when_between_maghrib_and_isha() {
+        use salah::Prayer;
+        let timetable = test_timetable();
+        let mut queue = build_prayer_queue(&timetable);
+        let between_maghrib_and_isha = *timetable.maghrib() + chrono::Duration::minutes(30);
+        queue.retain(|(t, _)| *t > between_maghrib_and_isha);
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].1, Event::Prayer(Prayer::Isha));
+    }
+
+    // ── next_midnight_after ───────────────────────────────────────────────────
+
+    #[test]
+    fn next_midnight_is_exactly_00_00_00_of_the_following_day() {
+        use chrono::{Datelike, NaiveDate, Timelike};
+        let today = NaiveDate::from_ymd_opt(2024, 3, 20).unwrap();
+        let midnight = next_midnight_after(today);
+        assert_eq!(midnight.date_naive().year(), 2024);
+        assert_eq!(midnight.date_naive().month(), 3);
+        assert_eq!(midnight.date_naive().day(), 21);
+        // Timelike is in scope via chrono above
+        assert_eq!(midnight.hour(), 0);
+        assert_eq!(midnight.minute(), 0);
+        assert_eq!(midnight.second(), 0);
+    }
+
+    #[test]
+    fn next_midnight_rolls_over_month_boundary() {
+        use chrono::{Datelike, NaiveDate};
+        let last_day_of_march = NaiveDate::from_ymd_opt(2024, 3, 31).unwrap();
+        let midnight = next_midnight_after(last_day_of_march);
+        assert_eq!(midnight.date_naive().month(), 4);
+        assert_eq!(midnight.date_naive().day(), 1);
+    }
+
+    #[test]
+    fn next_midnight_rolls_over_year_boundary() {
+        use chrono::{Datelike, NaiveDate};
+        let new_years_eve = NaiveDate::from_ymd_opt(2024, 12, 31).unwrap();
+        let midnight = next_midnight_after(new_years_eve);
+        assert_eq!(midnight.date_naive().year(), 2025);
+        assert_eq!(midnight.date_naive().month(), 1);
+        assert_eq!(midnight.date_naive().day(), 1);
+    }
+
+    #[test]
+    fn next_midnight_is_strictly_after_any_time_today() {
+        use chrono::{NaiveDate, TimeZone};
+        let today = NaiveDate::from_ymd_opt(2024, 3, 20).unwrap();
+        let midnight = next_midnight_after(today);
+        // Even 23:59:59 today must be before the returned midnight.
+        let last_second_today = Local
+            .from_local_datetime(&today.and_hms_opt(23, 59, 59).unwrap())
+            .unwrap();
+        assert!(midnight > last_second_today);
+    }
 }
