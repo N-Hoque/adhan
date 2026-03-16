@@ -5,7 +5,7 @@ use adhan::{
     new_timetable, play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
 };
 
-use chrono::{Datelike, Local, TimeZone};
+use chrono::{Datelike, Local};
 use clap::Parser;
 use salah::{Event, Prayer};
 
@@ -132,17 +132,22 @@ fn main() {
                     // timetable.midnight(), which is Islamic midnight
                     // (midpoint of the night), not the calendar boundary.
                     let now = Local::now();
-                    let next_midnight = {
-                        let tomorrow = (now + chrono::Duration::days(1)).date_naive();
-                        Local
-                            .from_local_datetime(&tomorrow.and_hms_opt(0, 0, 0).unwrap())
-                            .unwrap()
-                    };
+                    let today = now.date_naive();
+                    let next_midnight = adhan::next_midnight_after(today);
 
                     let secs_to_midnight = next_midnight.signed_duration_since(now).num_seconds();
                     if secs_to_midnight > 0 {
                         log::info!("All prayers complete. Sleeping until midnight for new day.");
                         sleep(Duration::from_secs(secs_to_midnight as u64));
+                    }
+
+                    // std::thread::sleep only guarantees a *minimum* sleep
+                    // duration — the OS may wake us fractionally early. Spin
+                    // in short bursts until the calendar date has actually
+                    // advanced before rebuilding, so we never accidentally
+                    // reload yesterday's timetable and get stuck in a loop.
+                    while Local::now().date_naive() == today {
+                        sleep(Duration::from_secs(1));
                     }
 
                     log::info!("Midnight reached – loading tomorrow's timetable.");
