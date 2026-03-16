@@ -83,7 +83,7 @@ fn main() {
 
                     // Drop any prayers that have already passed.
                     let now = Local::now();
-                    queue.retain(|(time, _)| *time > now);
+                    queue.retain(|(time, _)| *time >= now);
 
                     if queue.is_empty() {
                         log::info!("All prayers for {} have already passed.", now.format("%A, %-d %B %Y"));

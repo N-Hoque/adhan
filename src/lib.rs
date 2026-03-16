@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::NaiveDate;
+use chrono::{LocalResult, NaiveDate};
 
 pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanError, AdhanParameters, Method};
@@ -124,7 +124,13 @@ pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
     .map_err(AdhanError::IO)?
     .filter_map(|f| f.ok())
     .filter_map(|f| {
-        if f.file_type().is_ok_and(|f| f.is_file()) {
+        if f.file_type().is_ok_and(|t| t.is_file())
+            && f
+                .path()
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
+        {
             Some(f)
         } else {
             None
@@ -211,9 +217,22 @@ pub fn build_prayer_queue(timetable: &Times<Local>) -> VecDeque<(chrono::DateTim
 pub fn next_midnight_after(date: NaiveDate) -> chrono::DateTime<Local> {
     use chrono::TimeZone as _;
     let tomorrow = date.succ_opt().expect("date overflow computing next midnight");
-    Local
-        .from_local_datetime(&tomorrow.and_hms_opt(0, 0, 0).unwrap())
-        .unwrap()
+    let naive_midnight = tomorrow
+        .and_hms_opt(0, 0, 0)
+        .expect("invalid time constructing local midnight");
+
+    match Local.from_local_datetime(&naive_midnight) {
+        LocalResult::Single(dt) => dt,
+        // If midnight is ambiguous (e.g. due to offset changes), pick the earlier instant.
+        LocalResult::Ambiguous(earlier, _later) => earlier,
+        // If midnight does not exist in the local time zone on this date, fall back to
+        // midnight in UTC for the same date, converted to Local.
+        LocalResult::None => {
+            let utc_midnight =
+                chrono::DateTime::<chrono::Utc>::from_utc(naive_midnight, chrono::Utc);
+            utc_midnight.with_timezone(&Local)
+        }
+    }
 }
 
 fn get_device(device_name: &str) -> Option<Device> {
