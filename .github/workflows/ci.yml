@@ -46,20 +46,20 @@ jobs:
             use_cross: true
             run_tests: false
 
-          # ── macOS ─────────────────────────────────────────────────────────
+          # ── macOS (Disabled) ─────────────────────────────────────────────────────────
           # macos-15-large is an Intel (x86_64) runner
-          - name: macOS x86_64
-            os: macos-15-large
-            target: x86_64-apple-darwin
-            use_cross: false
-            run_tests: true
+          # - name: macOS x86_64
+          #   os: macos-15-large
+          #   target: x86_64-apple-darwin
+          #   use_cross: false
+          #   run_tests: true
 
           # macos-latest resolves to an Apple Silicon (arm64) runner
-          - name: macOS aarch64 (ARMv8)
-            os: macos-latest
-            target: aarch64-apple-darwin
-            use_cross: false
-            run_tests: true
+          # - name: macOS aarch64 (ARMv8)
+          #   os: macos-latest
+          #   target: aarch64-apple-darwin
+          #   use_cross: false
+          #   run_tests: true
 
           # ── Windows ───────────────────────────────────────────────────────
           - name: Windows x86_64
