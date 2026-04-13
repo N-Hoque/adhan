@@ -120,15 +120,4 @@ pub enum AdhanCommands {
         /// The name of the calculation method to generate a sample config from
         method: Method,
     },
-    #[command(subcommand)]
-    /// List audio components
-    List(AdhanListSubcommand),
-}
-
-#[derive(Debug, Subcommand)]
-pub enum AdhanListSubcommand {
-    /// List audio devices
-    Devices,
-    /// List audio hosts
-    Hosts,
 }

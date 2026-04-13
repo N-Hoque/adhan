@@ -1,8 +1,8 @@
 use std::{thread::sleep, time::Duration};
 
 use adhan::{
-    build_prayer_queue, create_config, initialize_user_config_directory, list_audio_devices, list_audio_hosts,
-    new_timetable, play_adhan, read_config, AdhanCommands, AdhanListSubcommand,
+    build_prayer_queue, create_config, initialize_user_config_directory, new_timetable, play_adhan, read_config,
+    AdhanCommands,
 };
 
 use chrono::{Datelike, Local};
@@ -33,12 +33,6 @@ fn main() {
     }
 
     match AdhanCommands::parse() {
-        AdhanCommands::List(AdhanListSubcommand::Devices) => {
-            list_audio_devices();
-        }
-        AdhanCommands::List(AdhanListSubcommand::Hosts) => {
-            list_audio_hosts();
-        }
         AdhanCommands::Generate { method } => {
             if let Err(err) = create_config(method) {
                 log::error!("{}", err);
