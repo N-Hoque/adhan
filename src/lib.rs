@@ -9,13 +9,14 @@ use std::{
 
 use chrono::{LocalResult, NaiveDate};
 
-pub use model::{AdhanCommands, AdhanListSubcommand};
 use model::{AdhanError, AdhanParameters, Method};
 use rand::seq::SliceRandom;
 use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
 use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
 use crate::model::{AdhanAudioError, AdhanType};
+
+pub use model::AdhanCommands;
 
 static AUDIO_PATH: &str = "audio";
 static SETTINGS_FILE: &str = "settings.yaml";
@@ -125,8 +126,7 @@ pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
     .filter_map(|f| f.ok())
     .filter_map(|f| {
         if f.file_type().is_ok_and(|t| t.is_file())
-            && f
-                .path()
+            && f.path()
                 .extension()
                 .and_then(|e| e.to_str())
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
@@ -168,21 +168,6 @@ pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
     sink.sleep_until_end();
 
     Ok(())
-}
-
-pub fn list_audio_devices() {
-    let host = rodio::cpal::default_host();
-    if let Ok(devices) = host.output_devices() {
-        for (idx, device) in devices.flat_map(|device| device.name()).enumerate() {
-            println!("{idx}: {device}");
-        }
-    }
-}
-
-pub fn list_audio_hosts() {
-    for (idx, device) in rodio::cpal::available_hosts().iter().enumerate() {
-        println!("{}: {}", idx, device.name());
-    }
 }
 
 #[must_use]
@@ -228,8 +213,7 @@ pub fn next_midnight_after(date: NaiveDate) -> chrono::DateTime<Local> {
         // If midnight does not exist in the local time zone on this date, fall back to
         // midnight in UTC for the same date, converted to Local.
         LocalResult::None => {
-            let utc_midnight =
-                chrono::DateTime::<chrono::Utc>::from_utc(naive_midnight, chrono::Utc);
+            let utc_midnight = chrono::Utc.from_utc_datetime(&naive_midnight);
             utc_midnight.with_timezone(&Local)
         }
     }
