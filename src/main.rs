@@ -39,15 +39,12 @@ fn main() {
                 std::process::exit(CONFIGURATION_CREATE_EXIT_CODE);
             }
         }
-        AdhanCommands::Test { audio_device, use_fajr } => {
-            if let Err(err) = play_adhan(
-                if use_fajr {
-                    Event::Prayer(Prayer::Fajr)
-                } else {
-                    Event::Prayer(Prayer::Isha)
-                },
-                &audio_device,
-            ) {
+        AdhanCommands::Test { use_fajr } => {
+            if let Err(err) = play_adhan(if use_fajr {
+                Event::Prayer(Prayer::Fajr)
+            } else {
+                Event::Prayer(Prayer::Isha)
+            }) {
                 log::error!("{}", err);
                 std::process::exit(PLAYBACK_EXIT_CODE);
             }
@@ -63,7 +60,7 @@ fn main() {
                 println!("{}", timetable.display(&current_time));
             }
         },
-        AdhanCommands::Run { audio_device } => match read_config() {
+        AdhanCommands::Run => match read_config() {
             Err(err) => {
                 log::error!("{}", err);
                 std::process::exit(CONFIGURATION_READ_EXIT_CODE);
@@ -114,7 +111,7 @@ fn main() {
                         }
 
                         log::info!("{} – playing adhan", event_name);
-                        if let Err(err) = play_adhan(event, &audio_device) {
+                        if let Err(err) = play_adhan(event) {
                             log::error!("{}", err);
                             std::process::exit(PLAYBACK_EXIT_CODE);
                         }

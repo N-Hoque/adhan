@@ -1,30 +1,39 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
+
+use clap::{Parser, ValueEnum};
 use salah::{Coordinates, Parameters};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AdhanAudioError {
-    #[error("stream failure {0}")]
-    Stream(#[from] rodio::StreamError),
-    #[error("decode failure {0}")]
-    Decode(#[from] rodio::decoder::DecoderError),
-    #[error("playback failure {0}")]
-    Playback(#[from] rodio::PlayError),
-}
-
-#[derive(Debug, Error)]
 pub enum AdhanError {
-    #[error("file IO failure")]
-    IO(#[from] std::io::Error),
-    #[error("YAML serialization/deserialization failure: {0}")]
-    Serialization(#[from] serde_yaml::Error),
-    #[error("configuration failure {0}")]
-    Configuration(String),
-    #[error("audio handler failed: {0}")]
-    Audio(AdhanAudioError),
-    #[error("unexpected error: {0}")]
-    Misc(String),
+    /// A filesystem operation failed.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// The config file could not be parsed.
+    #[error("config parse error: {0}")]
+    ConfigParse(#[from] serde_yaml::Error),
+
+    /// The platform config directory could not be resolved.
+    #[error("config directory unavailable: {0}")]
+    ConfigDir(String),
+
+    /// The audio directory was expected to exist but does not.
+    #[error("audio directory not found at {path}")]
+    AudioDirMissing { path: PathBuf },
+
+    /// The audio directory exists but contains no playable .mp3 files.
+    #[error("no audio files found in {path}")]
+    NoAudioFiles { path: PathBuf },
+
+    /// The chosen audio file could not be decoded.
+    #[error("audio decode error: {0}")]
+    AudioDecode(#[from] rodio::decoder::DecoderError),
+
+    /// The platform audio backend failed to open or play the stream.
+    #[error("audio playback error: {0}")]
+    AudioPlayback(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,16 +108,9 @@ impl Method {
 #[command(author, version, about, long_about=None)]
 pub enum AdhanCommands {
     /// Run adhan player
-    Run {
-        #[clap(default_value = "default")]
-        /// The output audio device to play the Adhan from
-        audio_device: String,
-    },
+    Run,
     /// Test audio playback
     Test {
-        /// The output audio device to play the Adhan from
-        #[clap(default_value = "default")]
-        audio_device: String,
         /// Play Fajr Adhan
         #[clap(short = 'f', long, required = false)]
         use_fajr: bool,
