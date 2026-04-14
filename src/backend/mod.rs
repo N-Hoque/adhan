@@ -1,20 +1,29 @@
 pub mod rodio;
 
+use ::rodio::Source;
+
+#[cfg(target_os = "linux")]
+pub mod pipewire;
+
 use crate::model::AdhanError;
 
 /// Trait that all platform audio backends must implement.
 ///
-/// The interface is intentionally minimal: callers pre-decode audio to
-/// interleaved f32 PCM and hand it off here. The backend is responsible
-/// for getting those samples to the platform audio service and blocking
-/// until playback is complete.
+/// The interface is intentionally minimal: callers supply a lazily-decoded
+/// `Source<Item = f32>` and the backend is responsible for streaming those
+/// samples to the platform audio service and blocking until playback is
+/// complete.
+///
+/// Rate and channel count are obtained from the `Source` itself via
+/// `Iterator::sample_rate()` and `Source::channels()`, so the caller does
+/// not need to pass them separately.
 pub trait AudioBackend {
-    /// Play `samples` (interleaved f32 PCM) to completion, then return.
+    /// Stream `source` to the platform audio output and block until done.
     ///
-    /// - `samples`  – interleaved PCM frames, e.g. [L0, R0, L1, R1, …]
-    /// - `rate`     – sample rate in Hz (e.g. 44100, 48000)
-    /// - `channels` – number of channels (1 = mono, 2 = stereo)
-    fn play_blocking(&self, samples: &[f32], rate: u32, channels: u16) -> Result<(), AdhanError>;
+    /// The source must yield interleaved f32 PCM frames. The backend is free
+    /// to pull samples from it on any thread, but must not call blocking I/O
+    /// or allocate inside any real-time callback.
+    fn play_blocking(&self, source: Box<dyn Source<Item = f32> + Send>) -> Result<(), AdhanError>;
 }
 
 // ── Platform alias ────────────────────────────────────────────────────────────
@@ -25,7 +34,7 @@ pub trait AudioBackend {
 // change here.
 
 #[cfg(target_os = "linux")]
-pub use self::rodio::RodioBackend as PlatformBackend;
+pub use self::pipewire::PipewireBackend as PlatformBackend;
 
 #[cfg(target_os = "macos")]
 pub use self::rodio::RodioBackend as PlatformBackend;
