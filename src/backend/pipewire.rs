@@ -64,7 +64,7 @@ const RING_BUFFER_CAPACITY: usize = 16_384;
 pub struct PipewireBackend;
 
 impl AudioBackend for PipewireBackend {
-    fn play_blocking(&self, source: Box<dyn rodio::Source<Item = f32> + Send>) -> Result<(), AdhanError> {
+    fn play_blocking(&self, mut source: Box<dyn rodio::Source<Item = f32> + Send>) -> Result<(), AdhanError> {
         let rate = source.sample_rate();
         let channels = source.channels();
 
@@ -85,19 +85,48 @@ impl AudioBackend for PipewireBackend {
 
         // ── Feeder thread ─────────────────────────────────────────────────
         //
-        // Drains the Source iterator and pushes samples into the ring buffer.
-        // Blocks (yields) when the ring buffer is full so we don't spin-waste
-        // a full core — the process callback will drain it shortly.
+        // Drains the Source iterator and pushes samples into the ring buffer
+        // in bulk chunks rather than one sample at a time. This amortises the
+        // overhead of the push loop and reduces the number of sleep checks,
+        // which matters on a low-power core like the Pi 2's ARMv7.
+        //
+        // Chunk size is 512 samples — at 48kHz stereo that's ~5ms of audio,
+        // matching a typical PipeWire quantum. Large enough to amortise loop
+        // overhead, small enough not to stall the feeder waiting to fill it.
 
         thread::spawn(move || {
-            for sample in source {
-                // Push one sample at a time. If the ring buffer is full,
-                // spin-yield until there is space. This keeps the feeder
-                // in lock-step with playback without busy-waiting hard.
-                while producer.try_push(sample).is_err() {
-                    thread::yield_now();
+            const CHUNK: usize = 512;
+            let mut buf = Vec::with_capacity(CHUNK);
+
+            'outer: loop {
+                // Fill the chunk buffer from the source iterator.
+                buf.clear();
+                for sample in source.by_ref().take(CHUNK) {
+                    buf.push(sample);
+                }
+
+                // Source exhausted and nothing buffered — we're done.
+                if buf.is_empty() {
+                    break 'outer;
+                }
+
+                // Push the chunk into the ring buffer. If there isn't enough
+                // space, sleep briefly and retry rather than spinning.
+                let mut written = 0;
+                while written < buf.len() {
+                    let n = producer.push_slice(&buf[written..]);
+                    written += n;
+                    if written < buf.len() {
+                        thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
+
+                // If we got fewer samples than requested, the source is done.
+                if buf.len() < CHUNK {
+                    break 'outer;
                 }
             }
+
             feeder_done_feeder.store(true, std::sync::atomic::Ordering::SeqCst);
         });
 
