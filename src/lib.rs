@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod model;
 
 use std::{
@@ -9,12 +10,13 @@ use std::{
 
 use chrono::{LocalResult, NaiveDate};
 
+use backend::{AudioBackend, PlatformBackend};
 use model::{AdhanError, AdhanParameters, Method};
 use rand::seq::SliceRandom;
-use rodio::{cpal::traits::HostTrait, Decoder, Device, DeviceTrait, OutputStream, Sink};
+use rodio::{Decoder, Source};
 use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
-use crate::model::{AdhanAudioError, AdhanType};
+use crate::model::AdhanType;
 
 pub use model::AdhanCommands;
 
@@ -29,18 +31,18 @@ pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
         DirBuilder::new()
             .recursive(true)
             .create(audio_path)
-            .map_err(AdhanError::IO)?;
+            .map_err(AdhanError::Io)?;
 
         // Create expected subdirectories for different adhan types.
         DirBuilder::new()
             .recursive(true)
             .create(audio_path.join("fajr"))
-            .map_err(AdhanError::IO)?;
+            .map_err(AdhanError::Io)?;
 
         DirBuilder::new()
             .recursive(true)
             .create(audio_path.join("normal"))
-            .map_err(AdhanError::IO)?;
+            .map_err(AdhanError::Io)?;
 
         log::info!("Adhan program initialized!");
         log::info!("To configure:");
@@ -57,7 +59,7 @@ pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
 
 pub fn adhan_base_directory() -> Result<PathBuf, AdhanError> {
     directories_next::ProjectDirs::from("", "", "adhan")
-        .ok_or_else(|| AdhanError::Configuration("cannot generate configuration folder for 'adhan'".into()))
+        .ok_or_else(|| AdhanError::ConfigDir("cannot resolve configuration folder for 'adhan'".into()))
         .map(|project_dirs| project_dirs.config_dir().to_path_buf())
 }
 
@@ -69,16 +71,16 @@ pub fn read_config() -> Result<AdhanParameters, AdhanError> {
     let config_dir = adhan_base_directory()?;
 
     let config_path = config_dir.join(SETTINGS_FILE);
-    let file = File::open(config_path).map_err(AdhanError::IO)?;
+    let file = File::open(config_path).map_err(AdhanError::Io)?;
 
-    serde_yaml::from_reader(file).map_err(AdhanError::Serialization)
+    serde_yaml::from_reader(file).map_err(AdhanError::ConfigParse)
 }
 
 pub fn create_config(method: Method) -> Result<(), AdhanError> {
     let config_dir = adhan_base_directory()?;
 
     let config_path = config_dir.join(SETTINGS_FILE);
-    let file = File::create(config_path).map_err(AdhanError::IO)?;
+    let file = File::create(config_path).map_err(AdhanError::Io)?;
 
     serde_yaml::to_writer(
         file,
@@ -87,10 +89,10 @@ pub fn create_config(method: Method) -> Result<(), AdhanError> {
             parameters: method.parameters(),
         },
     )
-    .map_err(AdhanError::Serialization)
+    .map_err(AdhanError::ConfigParse)
 }
 
-pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
+pub fn play_adhan(prayer: Event) -> Result<(), AdhanError> {
     let adhan_type = match prayer {
         Event::Qiyam | Event::Sunrise | Event::Restricted(_) => return Ok(()),
         Event::Prayer(Prayer::Fajr) => AdhanType::Fajr,
@@ -99,73 +101,57 @@ pub fn play_adhan(prayer: Event, device: &str) -> Result<(), AdhanError> {
 
     let audio_config_path = adhan_audio_directory()?;
 
-    assert!(
-        std::fs::metadata(&audio_config_path).is_ok(),
-        "Audio folder is not present. Please create one at {}.",
-        audio_config_path.display(),
-    );
+    if std::fs::metadata(&audio_config_path).is_err() {
+        return Err(AdhanError::AudioDirMissing {
+            path: audio_config_path,
+        });
+    }
 
-    // Get a output stream handle to the default physical sound device
-
-    let (_stream, stream_handle) = get_device(device)
-        .map_or_else(OutputStream::try_default, |device| {
-            OutputStream::try_from_device(&device)
+    // Pick a random .mp3 from the appropriate subfolder.
+    let subfolder = audio_config_path.join(adhan_type.to_string());
+    let audio_dir = std::fs::read_dir(&subfolder)
+        .map_err(AdhanError::Io)?
+        .filter_map(|f| f.ok())
+        .filter_map(|f| {
+            if f.file_type().is_ok_and(|t| t.is_file())
+                && f.path()
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
+            {
+                Some(f)
+            } else {
+                None
+            }
         })
-        .map_err(AdhanAudioError::Stream)
-        .map_err(AdhanError::Audio)?;
-
-    // Load a sound from a random audio file
-    let audio_dir = std::fs::read_dir(audio_config_path.join({
-        if adhan_type == AdhanType::Fajr {
-            "fajr"
-        } else {
-            "normal"
-        }
-    }))
-    .map_err(AdhanError::IO)?
-    .filter_map(|f| f.ok())
-    .filter_map(|f| {
-        if f.file_type().is_ok_and(|t| t.is_file())
-            && f.path()
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
-        {
-            Some(f)
-        } else {
-            None
-        }
-    })
-    .collect::<Vec<_>>();
+        .collect::<Vec<_>>();
 
     let mut rng = rand::thread_rng();
 
     let audio_file_path = audio_dir
         .choose(&mut rng)
-        .ok_or_else(|| AdhanError::Misc(String::from("no audio files available!")))?
+        .ok_or_else(|| AdhanError::NoAudioFiles { path: subfolder })?
         .path();
+
     let audio_file = std::fs::OpenOptions::new()
         .read(true)
-        .open(audio_file_path)
-        .map_err(AdhanError::IO)?;
+        .open(&audio_file_path)
+        .map_err(AdhanError::Io)?;
 
-    let file = BufReader::new(audio_file);
+    // Decode the MP3 in full before handing off to the backend.
+    // The backend's play_blocking() contract requires pre-decoded f32 PCM,
+    // keeping its hot path free of file I/O and allocations.
+    let decoder = Decoder::new(BufReader::new(audio_file)).map_err(AdhanError::AudioDecode)?;
 
-    // Decode that sound file into a source
-    let source = Decoder::new(file)
-        .map_err(AdhanAudioError::Decode)
-        .map_err(AdhanError::Audio)?;
+    let rate = decoder.sample_rate();
+    let channels = decoder.channels();
 
-    let sink = Sink::try_new(&stream_handle)
-        .map_err(AdhanAudioError::Playback)
-        .map_err(AdhanError::Audio)?;
+    // rodio's iterator yields i16 samples; convert to f32 in [-1.0, 1.0].
+    let samples: Vec<f32> = rodio::source::Source::convert_samples::<f32>(decoder).collect();
 
-    // Add a dummy source of the sake of the example.
-    sink.append(source);
-
-    // The sound plays in a separate thread. This call will block the current thread until the sink
-    // has finished playing all its queued sounds.
-    sink.sleep_until_end();
+    // Delegate to the platform backend.  On every OS this resolves to
+    // PlatformBackend at compile time — no dynamic dispatch.
+    PlatformBackend.play_blocking(&samples, rate, channels)?;
 
     Ok(())
 }
@@ -217,17 +203,6 @@ pub fn next_midnight_after(date: NaiveDate) -> chrono::DateTime<Local> {
             utc_midnight.with_timezone(&Local)
         }
     }
-}
-
-fn get_device(device_name: &str) -> Option<Device> {
-    rodio::cpal::default_host()
-        .output_devices()
-        .into_iter()
-        .flatten()
-        .find_map(|dev| {
-            dev.name()
-                .map_or(None, |name| if name == device_name { Some(dev) } else { None })
-        })
 }
 
 #[cfg(test)]
