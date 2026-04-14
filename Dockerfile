@@ -31,7 +31,9 @@ case "$TARGETPLATFORM" in
     RUST_TARGET="x86_64-unknown-linux-gnu"
     apt-get update
     apt-get install -y --no-install-recommends \
-        libasound2-dev
+        libasound2-dev \
+        libpipewire-0.3-dev \
+        libclang-dev
     ;;
   linux/arm64)
     RUST_TARGET="aarch64-unknown-linux-gnu"
@@ -40,7 +42,9 @@ case "$TARGETPLATFORM" in
     apt-get install -y --no-install-recommends \
         gcc-aarch64-linux-gnu \
         libc6-dev-arm64-cross \
-        libasound2-dev:arm64
+        libasound2-dev:arm64 \
+        libpipewire-0.3-dev:arm64 \
+        libclang-dev
     # Tell the linker to use the arm64 cross-linker
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
     ;;
@@ -51,7 +55,9 @@ case "$TARGETPLATFORM" in
     apt-get install -y --no-install-recommends \
         gcc-arm-linux-gnueabihf \
         libc6-dev-armhf-cross \
-        libasound2-dev:armhf
+        libasound2-dev:armhf \
+        libpipewire-0.3-dev:armhf \
+        libclang-dev
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
     ;;
   *)
@@ -76,15 +82,20 @@ RUST_TARGET=$(cat /rust_target.txt)
 case "$TARGETPLATFORM" in
   linux/arm64)
     echo 'export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> /env.sh
-    echo 'export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu'                       >> /env.sh
-    echo 'export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig'                >> /env.sh
-    echo 'export PKG_CONFIG_ALLOW_CROSS=1'                                             >> /env.sh
+    echo 'export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu'                                                          >> /env.sh
+    echo 'export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig'                                                   >> /env.sh
+    echo 'export PKG_CONFIG_ALLOW_CROSS=1'                                                                                >> /env.sh
+    echo 'export BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2'                            >> /env.sh
     ;;
   linux/arm/v7)
     echo 'export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc' >> /env.sh
     echo 'export PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf'                           >> /env.sh
     echo 'export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig'                    >> /env.sh
     echo 'export PKG_CONFIG_ALLOW_CROSS=1'                                                   >> /env.sh
+    echo 'export BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2' >> /env.sh
+    ;;
+  linux/amd64)
+    echo 'export BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2' >> /env.sh
     ;;
   *)
     touch /env.sh
@@ -133,6 +144,7 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libasound2 \
+        libpipewire-0.3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /adhan /usr/local/bin/adhan

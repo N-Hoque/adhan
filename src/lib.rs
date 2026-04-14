@@ -13,7 +13,7 @@ use chrono::{LocalResult, NaiveDate};
 use backend::{AudioBackend, PlatformBackend};
 use model::{AdhanError, AdhanParameters, Method};
 use rand::seq::SliceRandom;
-use rodio::{Decoder, Source};
+use rodio::Decoder;
 use salah::{Coordinates, Event, Local, Prayer, Schedule, Times};
 
 use crate::model::AdhanType;
@@ -138,20 +138,15 @@ pub fn play_adhan(prayer: Event) -> Result<(), AdhanError> {
         .open(&audio_file_path)
         .map_err(AdhanError::Io)?;
 
-    // Decode the MP3 in full before handing off to the backend.
-    // The backend's play_blocking() contract requires pre-decoded f32 PCM,
-    // keeping its hot path free of file I/O and allocations.
+    // Wrap in a lazy decoder — samples are pulled on demand by the backend
+    // rather than collected into a Vec up front. convert_samples() adapts
+    // the i16 output of Decoder to the f32 PCM the AudioBackend trait expects.
     let decoder = Decoder::new(BufReader::new(audio_file)).map_err(AdhanError::AudioDecode)?;
+    let source = Box::new(rodio::source::Source::convert_samples::<f32>(decoder));
 
-    let rate = decoder.sample_rate();
-    let channels = decoder.channels();
-
-    // rodio's iterator yields i16 samples; convert to f32 in [-1.0, 1.0].
-    let samples: Vec<f32> = rodio::source::Source::convert_samples::<f32>(decoder).collect();
-
-    // Delegate to the platform backend.  On every OS this resolves to
+    // Delegate to the platform backend. On every OS this resolves to
     // PlatformBackend at compile time — no dynamic dispatch.
-    PlatformBackend.play_blocking(&samples, rate, channels)?;
+    PlatformBackend.play_blocking(source)?;
 
     Ok(())
 }
