@@ -92,7 +92,7 @@ impl ComGuard {
         if hr.is_err() && hr != windows::Win32::Foundation::RPC_E_CHANGED_MODE {
             return Err(AdhanError::AudioPlayback(format!("CoInitializeEx failed: {hr:?}")));
         }
-        Ok(ComGuard)
+        Ok(Self)
     }
 }
 

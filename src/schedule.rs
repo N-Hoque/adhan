@@ -42,13 +42,14 @@ pub fn new_timetable(parameters: &AdhanParameters) -> Times<Local> {
 /// The returned `VecDeque` is in chronological order (Fajr → Isha). No
 /// filtering is applied here — callers are responsible for dropping prayers
 /// that have already passed (e.g. via `retain`).
+#[must_use]
 pub fn build_prayer_queue(timetable: &Times<Local>) -> VecDeque<(chrono::DateTime<Local>, Event)> {
     VecDeque::from([
-        (timetable.fajr().clone(), Event::Prayer(Prayer::Fajr)),
-        (timetable.dhuhr().clone(), Event::Prayer(Prayer::Dhuhr)),
-        (timetable.asr().clone(), Event::Prayer(Prayer::Asr)),
-        (timetable.maghrib().clone(), Event::Prayer(Prayer::Maghrib)),
-        (timetable.isha().clone(), Event::Prayer(Prayer::Isha)),
+        (*timetable.fajr(), Event::Prayer(Prayer::Fajr)),
+        (*timetable.dhuhr(), Event::Prayer(Prayer::Dhuhr)),
+        (*timetable.asr(), Event::Prayer(Prayer::Asr)),
+        (*timetable.maghrib(), Event::Prayer(Prayer::Maghrib)),
+        (*timetable.isha(), Event::Prayer(Prayer::Isha)),
     ])
 }
 
@@ -62,6 +63,7 @@ pub fn build_prayer_queue(timetable: &Times<Local>) -> VecDeque<(chrono::DateTim
 /// This is deliberately *not* `timetable.midnight()`, which is Islamic midnight
 /// (the midpoint of the night between Maghrib and Fajr), not the civil
 /// calendar boundary. Do not change this without understanding that distinction.
+#[must_use]
 pub fn next_midnight_after(date: NaiveDate) -> chrono::DateTime<Local> {
     use chrono::TimeZone as _;
 
@@ -93,7 +95,7 @@ mod tests {
 
     /// Fixed timetable used across all scheduling tests.
     ///
-    /// 2024-03-20 (spring equinox), London, MoonsightingCommittee.
+    /// 2024-03-20 (spring equinox), London, `MoonsightingCommittee`.
     /// This date and location produce stable, well-known prayer times that
     /// do not shift between runs.
     fn test_timetable() -> Times<Local> {
@@ -150,7 +152,7 @@ mod tests {
     fn retain_keeps_all_prayers_when_all_are_in_the_future() {
         let timetable = test_timetable();
         let mut queue = build_prayer_queue(&timetable);
-        let before_fajr = timetable.fajr().clone() - chrono::Duration::hours(1);
+        let before_fajr = *timetable.fajr() - chrono::Duration::hours(1);
         queue.retain(|(t, _)| *t > before_fajr);
         assert_eq!(queue.len(), 5);
     }
@@ -159,7 +161,7 @@ mod tests {
     fn retain_drops_all_prayers_when_all_are_in_the_past() {
         let timetable = test_timetable();
         let mut queue = build_prayer_queue(&timetable);
-        let after_isha = timetable.isha().clone() + chrono::Duration::hours(1);
+        let after_isha = *timetable.isha() + chrono::Duration::hours(1);
         queue.retain(|(t, _)| *t > after_isha);
         assert!(queue.is_empty());
     }
