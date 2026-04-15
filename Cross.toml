@@ -24,6 +24,7 @@ passthrough = [
     "PKG_CONFIG_ALLOW_CROSS=1",
     "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig",
     "BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2",
+    "CFLAGS_aarch64_unknown_linux_gnu=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2",
 ]
 
 [target.armv7-unknown-linux-gnueabihf]
@@ -34,4 +35,5 @@ passthrough = [
     "PKG_CONFIG_ALLOW_CROSS=1",
     "PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig",
     "BINDGEN_EXTRA_CLANG_ARGS=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2",
+    "CFLAGS_armv7_unknown_linux_gnueabihf=-I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2",
 ]
