@@ -11,7 +11,7 @@ use std::{io::BufReader, path::PathBuf};
 /// corresponding extension here.
 const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "wav", "flac", "ogg"];
 
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use rodio::Decoder;
 use salah::{Event, Prayer};
 
@@ -53,7 +53,7 @@ pub(crate) fn select_audio_file(adhan_type: AdhanType) -> Result<PathBuf, AdhanE
         .map(|entry| entry.path())
         .collect();
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     candidates
         .choose(&mut rng)
@@ -92,6 +92,21 @@ pub fn play_adhan(prayer: Event) -> Result<(), AdhanError> {
     let source = Box::new(rodio::source::Source::convert_samples::<f32>(decoder));
 
     PlatformBackend.play_blocking(source)
+}
+
+/// A `PrayerEventHandler` that plays the appropriate adhan audio file.
+///
+/// This is a thin wrapper around [`play_adhan`] that plugs audio playback
+/// into the scheduler's handler system. Decoupling it from the run loop
+/// means audio is one of potentially many independent actions taken when a
+/// prayer fires.
+pub struct AdhanPlayer;
+
+impl crate::schedule::PrayerEventHandler for AdhanPlayer {
+    fn on_prayer(&self, event: &salah::Event, event_name: &str) -> Result<(), crate::model::AdhanError> {
+        log::info!("{} – playing adhan", event_name);
+        play_adhan(*event)
+    }
 }
 
 #[cfg(test)]
