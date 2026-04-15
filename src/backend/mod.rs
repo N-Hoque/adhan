@@ -5,6 +5,9 @@ use ::rodio::Source;
 #[cfg(target_os = "linux")]
 pub mod pipewire;
 
+#[cfg(target_os = "windows")]
+pub mod wasapi;
+
 use crate::model::AdhanError;
 
 /// Trait that all platform audio backends must implement.
@@ -38,4 +41,4 @@ pub use self::pipewire::PipewireBackend as PlatformBackend;
 #[cfg(target_os = "macos")]
 pub use self::rodio::RodioBackend as PlatformBackend;
 #[cfg(target_os = "windows")]
-pub use self::rodio::RodioBackend as PlatformBackend;
+pub use self::wasapi::WasapiBackend as PlatformBackend;
