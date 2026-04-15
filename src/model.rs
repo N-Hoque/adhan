@@ -42,11 +42,18 @@ pub(crate) enum AdhanType {
     Fajr,
 }
 
-impl std::fmt::Display for AdhanType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl AdhanType {
+    /// Returns the name of the audio subfolder that corresponds to this adhan
+    /// type.
+    ///
+    /// These strings are the literal directory names on disk (`audio/fajr/`,
+    /// `audio/normal/`). Having an explicit method — rather than relying on a
+    /// `Display` impl — makes the coupling between this type and the filesystem
+    /// layout visible and keeps it in one place.
+    pub(crate) fn subfolder_name(self) -> &'static str {
         match self {
-            Self::Normal => write!(f, "normal"),
-            Self::Fajr => write!(f, "fajr"),
+            Self::Normal => "normal",
+            Self::Fajr => "fajr",
         }
     }
 }
