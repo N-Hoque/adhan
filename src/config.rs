@@ -66,7 +66,7 @@ pub fn initialize_user_config_directory() -> Result<(), AdhanError> {
 pub fn read_config() -> Result<AdhanParameters, AdhanError> {
     let config_path = adhan_base_directory()?.join(SETTINGS_FILE);
     let file = File::open(config_path).map_err(AdhanError::Io)?;
-    serde_yaml::from_reader(file).map_err(AdhanError::ConfigParse)
+    serde_yml::from_reader(file).map_err(AdhanError::ConfigParse)
 }
 
 /// Serialises a default `AdhanParameters` (zero coordinates, given method)
@@ -77,7 +77,7 @@ pub fn create_config(method: Method) -> Result<(), AdhanError> {
     let config_path = adhan_base_directory()?.join(SETTINGS_FILE);
     let file = File::create(config_path).map_err(AdhanError::Io)?;
 
-    serde_yaml::to_writer(
+    serde_yml::to_writer(
         file,
         &AdhanParameters {
             coordinates: Coordinates::new(0.0, 0.0),
@@ -140,11 +140,11 @@ mod tests {
             parameters: Method::MoonsightingCommittee.parameters(),
         };
         let file = File::create(&config_path).expect("create config file");
-        serde_yaml::to_writer(file, &params).expect("write config");
+        serde_yml::to_writer(file, &params).expect("write config");
 
         // Read it back and verify the coordinates survived the roundtrip.
         let file = File::open(&config_path).expect("open config file");
-        let read_back: AdhanParameters = serde_yaml::from_reader(file).expect("read config");
+        let read_back: AdhanParameters = serde_yml::from_reader(file).expect("read config");
 
         assert!(
             (read_back.coordinates().latitude - 51.5074).abs() < 1e-6,
@@ -171,10 +171,10 @@ mod tests {
             parameters: Method::MuslimWorldLeague.parameters(),
         };
         let file = File::create(&config_path).expect("create config file");
-        serde_yaml::to_writer(file, &params).expect("write config");
+        serde_yml::to_writer(file, &params).expect("write config");
 
         let file = File::open(&config_path).expect("open config file");
-        let result: Result<AdhanParameters, _> = serde_yaml::from_reader(file);
+        let result: Result<AdhanParameters, _> = serde_yml::from_reader(file);
         assert!(
             result.is_ok(),
             "create_config produced invalid YAML: {:?}",
@@ -196,7 +196,7 @@ mod tests {
         write!(file, "{{{{ not: valid: yaml: ::::").expect("write bad yaml");
 
         let file = std::fs::File::open(&config_path).expect("open file");
-        let result: Result<AdhanParameters, _> = serde_yaml::from_reader(file);
+        let result: Result<AdhanParameters, _> = serde_yml::from_reader(file);
         assert!(result.is_err(), "expected a parse error for malformed YAML but got Ok");
     }
 
@@ -215,10 +215,10 @@ mod tests {
             parameters: Method::Other.parameters(),
         };
         let file = File::create(&config_path).expect("create config file");
-        serde_yaml::to_writer(file, &params).expect("write config");
+        serde_yml::to_writer(file, &params).expect("write config");
 
         let file = File::open(&config_path).expect("open config file");
-        let read_back: AdhanParameters = serde_yaml::from_reader(file).expect("read config");
+        let read_back: AdhanParameters = serde_yml::from_reader(file).expect("read config");
 
         assert!((read_back.coordinates().latitude).abs() < 1e-6);
         assert!((read_back.coordinates().longitude).abs() < 1e-6);

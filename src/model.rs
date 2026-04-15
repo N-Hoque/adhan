@@ -13,7 +13,7 @@ pub enum AdhanError {
 
     /// The config file could not be parsed.
     #[error("config parse error: {0}")]
-    ConfigParse(#[from] serde_yaml::Error),
+    ConfigParse(#[from] serde_yml::Error),
 
     /// The platform config directory could not be resolved.
     #[error("config directory unavailable: {0}")]
