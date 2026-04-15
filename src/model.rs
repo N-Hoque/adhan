@@ -34,6 +34,10 @@ pub enum AdhanError {
     /// The platform audio backend failed to open or play the stream.
     #[error("audio playback error: {0}")]
     AudioPlayback(String),
+
+    /// The desktop notification could not be delivered.
+    #[error("notification error: {0}")]
+    Notification(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -3,18 +3,16 @@ use std::{thread::sleep, time::Duration};
 use adhan::model::AdhanError;
 use adhan::schedule::next_midnight_after;
 use adhan::{
-    build_prayer_queue, create_config, initialize_user_config_directory, new_timetable, play_adhan, read_config,
-    AdhanCommands,
+    build_prayer_queue, create_config, initialize_user_config_directory, new_timetable, read_config,
+    AdhanCommands, AdhanPlayer, PrayerEventHandler, PrayerNotifier,
 };
 
 use chrono::{Datelike, Local};
 use clap::Parser;
-use salah::Event;
 
 const CONFIGURATION_INIT_EXIT_CODE: i32 = 1;
 const CONFIGURATION_CREATE_EXIT_CODE: i32 = 2;
 const CONFIGURATION_READ_EXIT_CODE: i32 = 3;
-const PLAYBACK_EXIT_CODE: i32 = 4;
 
 fn initialise_logging() {
     simplelog::TermLogger::init(
@@ -38,14 +36,22 @@ fn exit_on_error<T>(result: Result<T, AdhanError>, code: i32) -> T {
 /// Runs the main scheduler loop.
 ///
 /// Loads the prayer timetable for the current day, works through each prayer
-/// in chronological order (skipping any that have already passed), plays the
-/// adhan at each prayer time, then sleeps until civil midnight before
-/// reloading for the next day.
+/// in chronological order (skipping any that have already passed), then fires
+/// each registered handler at the appropriate time. Sleeps until civil
+/// midnight before reloading for the next day.
+///
+/// Handlers are independent — an error in one is logged and the remaining
+/// handlers still run. No handler failure is fatal.
 ///
 /// This function never returns — it loops indefinitely until the process is
 /// killed.
 fn run() -> ! {
     let parameters = exit_on_error(read_config(), CONFIGURATION_READ_EXIT_CODE);
+
+    let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![
+        Box::new(PrayerNotifier),
+        Box::new(AdhanPlayer),
+    ];
 
     log::info!("Started Adhan!");
 
@@ -91,8 +97,12 @@ fn run() -> ! {
                 sleep(Duration::from_secs(secs as u64));
             }
 
-            log::info!("{} – playing adhan", event_name);
-            exit_on_error(play_adhan(event), PLAYBACK_EXIT_CODE);
+            log::info!("Prayer time: {}", event_name);
+            for handler in &handlers {
+                if let Err(err) = handler.on_prayer(&event, event_name) {
+                    log::error!("{}", err);
+                }
+            }
         }
 
         // All prayers done for today. Sleep until 00:00 of the next calendar
@@ -134,11 +144,20 @@ fn main() {
         }
         AdhanCommands::Test { use_fajr } => {
             let event = if use_fajr {
-                Event::Prayer(salah::Prayer::Fajr)
+                salah::Event::Prayer(salah::Prayer::Fajr)
             } else {
-                Event::Prayer(salah::Prayer::Isha)
+                salah::Event::Prayer(salah::Prayer::Isha)
             };
-            exit_on_error(play_adhan(event), PLAYBACK_EXIT_CODE);
+            let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![
+                Box::new(PrayerNotifier),
+                Box::new(AdhanPlayer),
+            ];
+            let event_name = event.name();
+            for handler in &handlers {
+                if let Err(err) = handler.on_prayer(&event, event_name) {
+                    log::error!("{}", err);
+                }
+            }
         }
         AdhanCommands::Timetable => {
             let parameters = exit_on_error(read_config(), CONFIGURATION_READ_EXIT_CODE);

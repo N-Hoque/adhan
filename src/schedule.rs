@@ -5,6 +5,19 @@ use salah::{Event, Local, Prayer, Schedule, Times};
 
 use crate::model::AdhanParameters;
 
+/// Trait for types that respond to a prayer event firing.
+///
+/// The scheduler calls `on_prayer` once per handler for each prayer that
+/// fires. Handlers are independent — a failure in one does not affect others.
+/// Errors are logged by the caller; handlers should not exit the process.
+///
+/// The `event_name` parameter is the display name already resolved for the
+/// current day (i.e. Friday Dhuhr is already passed as its Friday name
+/// by the time `on_prayer` is called).
+pub trait PrayerEventHandler {
+    fn on_prayer(&self, event: &Event, event_name: &str) -> Result<(), crate::model::AdhanError>;
+}
+
 /// Builds a `Times<Local>` timetable for today using the given coordinates
 /// and calculation parameters.
 ///
