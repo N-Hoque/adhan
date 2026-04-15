@@ -14,11 +14,11 @@ use pipewire::{
     context::ContextBox,
     main_loop::MainLoopRc,
     properties::properties,
-    stream::{StreamBox, StreamFlags},
+    stream::{StreamBox, StreamFlags, StreamListener},
 };
 use ringbuf::{
     traits::{Consumer, Observer, Producer, Split},
-    HeapRb,
+    HeapCons, HeapRb,
 };
 
 use crate::{backend::AudioBackend, model::AdhanError};
@@ -58,13 +58,13 @@ const RING_BUFFER_CAPACITY: usize = 16_384;
 /// `process` callback holds the consumer half and copies samples out into
 /// PipeWire's buffer on demand — no allocation, no I/O, no blocking.
 ///
-/// An `Arc<atomic>` done flag is set by the feeder once the source is
+/// An `Arc<AtomicBool>` done flag is set by the feeder once the source is
 /// exhausted. The process callback drains any remaining samples from the
 /// ring buffer and then quits the main loop.
 pub struct PipewireBackend;
 
 impl AudioBackend for PipewireBackend {
-    fn play_blocking(&self, mut source: Box<dyn rodio::Source<Item = f32> + Send>) -> Result<(), AdhanError> {
+    fn play_blocking(&self, source: Box<dyn rodio::Source<Item = f32> + Send>) -> Result<(), AdhanError> {
         let rate = source.sample_rate();
         let channels = source.channels();
 
@@ -73,75 +73,30 @@ impl AudioBackend for PipewireBackend {
         // Split into (producer, consumer). The producer is moved into the
         // feeder thread; the consumer is moved into the process callback.
         // HeapRb is lock-free and safe to use across threads.
-
         let rb = HeapRb::<f32>::new(RING_BUFFER_CAPACITY);
-        let (mut producer, consumer) = rb.split();
+        let (producer, consumer) = rb.split();
 
-        // Shared flag: feeder sets this to true once the source iterator
-        // is exhausted. Uses SeqCst ordering for simplicity — this is not
-        // on the hot path.
         let feeder_done = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let feeder_done_feeder = Arc::clone(&feeder_done);
 
-        // ── Feeder thread ─────────────────────────────────────────────────
+        spawn_feeder_thread(source, producer, Arc::clone(&feeder_done));
+
+        // ── PipeWire session setup ────────────────────────────────────────
         //
-        // Drains the Source iterator and pushes samples into the ring buffer
-        // in bulk chunks rather than one sample at a time. This amortises the
-        // overhead of the push loop and reduces the number of sleep checks,
-        // which matters on a low-power core like the Pi 2's ARMv7.
-        //
-        // Chunk size is 512 samples — at 48kHz stereo that's ~5ms of audio,
-        // matching a typical PipeWire quantum. Large enough to amortise loop
-        // overhead, small enough not to stall the feeder waiting to fill it.
-
-        thread::spawn(move || {
-            const CHUNK: usize = 512;
-            let mut buf = Vec::with_capacity(CHUNK);
-
-            'outer: loop {
-                // Fill the chunk buffer from the source iterator.
-                buf.clear();
-                for sample in source.by_ref().take(CHUNK) {
-                    buf.push(sample);
-                }
-
-                // Source exhausted and nothing buffered — we're done.
-                if buf.is_empty() {
-                    break 'outer;
-                }
-
-                // Push the chunk into the ring buffer. If there isn't enough
-                // space, sleep briefly and retry rather than spinning.
-                let mut written = 0;
-                while written < buf.len() {
-                    let n = producer.push_slice(&buf[written..]);
-                    written += n;
-                    if written < buf.len() {
-                        thread::sleep(std::time::Duration::from_millis(1));
-                    }
-                }
-
-                // If we got fewer samples than requested, the source is done.
-                if buf.len() < CHUNK {
-                    break 'outer;
-                }
-            }
-
-            feeder_done_feeder.store(true, std::sync::atomic::Ordering::SeqCst);
-        });
-
-        // ── PipeWire setup ────────────────────────────────────────────────
-
+        // The three mandatory PipeWire objects must be created in this order
+        // and kept alive for the duration of the session. CoreBox and
+        // StreamBox carry lifetimes tied to their parents so they are kept
+        // local to this frame rather than returned from helper functions.
         let mainloop = MainLoopRc::new(None).map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
-
         let context = ContextBox::new(mainloop.loop_(), None).map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
-
         let core = context
             .connect(None)
             .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
 
-        // ── Stream ────────────────────────────────────────────────────────
-
+        // ── Stream creation ───────────────────────────────────────────────
+        //
+        // Registers this process as a named music playback client. Properties
+        // are set here, before the listener is attached, so they are readable
+        // independently of the callback logic below.
         let stream = StreamBox::new(
             &core,
             "adhan",
@@ -149,83 +104,17 @@ impl AudioBackend for PipewireBackend {
                 *pipewire::keys::MEDIA_TYPE     => "Audio",
                 *pipewire::keys::MEDIA_ROLE     => "Music",
                 *pipewire::keys::MEDIA_CATEGORY => "Playback",
-                *pipewire::keys::APP_NAME       => "adhan",
-                *pipewire::keys::APP_ID         => "adhan",
+                *pipewire::keys::APP_NAME       => "Adhan Player",
+                *pipewire::keys::APP_ID         => "nhoque.adhan",
             },
         )
         .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
 
-        // ── Shared state for the process callback ─────────────────────────
-        //
-        // Everything in the process callback must be Send + 'static.
-        // The ring buffer consumer is already Send. We wrap it in an
-        // Rc<RefCell<_>> because the callback closure is not Send itself
-        // (PipeWire callbacks run on the same thread as the main loop),
-        // but we need interior mutability to advance the consumer.
+        // ── Process callback ──────────────────────────────────────────────
+        let finished = register_process_callback(&stream, consumer, feeder_done, mainloop.clone(), channels)?;
 
-        let consumer_cell = Rc::new(std::cell::RefCell::new(consumer));
-        let finished = Rc::new(Cell::new(false));
-
-        let consumer_cb = Rc::clone(&consumer_cell);
-        let finished_cb = Rc::clone(&finished);
-        let quit_loop = mainloop.clone();
-
-        // ── Listener / callbacks ──────────────────────────────────────────
-
-        let _listener = stream
-            .add_local_listener::<()>()
-            .process(move |stream, _userdata| {
-                let Some(mut buf) = stream.dequeue_buffer() else {
-                    return;
-                };
-
-                let datas = buf.datas_mut();
-                let data = &mut datas[0];
-
-                let (byte_count, should_quit) = {
-                    let dst_raw: &mut [u8] = match data.data() {
-                        Some(d) => d,
-                        None => return,
-                    };
-
-                    let max_samples = dst_raw.len() / std::mem::size_of::<f32>();
-                    let dst: &mut [f32] =
-                        bytemuck::cast_slice_mut(&mut dst_raw[..max_samples * std::mem::size_of::<f32>()]);
-
-                    // Pop as many samples as will fit in this PipeWire buffer.
-                    let mut cons = consumer_cb.borrow_mut();
-                    let n = cons.pop_slice(dst);
-
-                    // Zero out any frames we couldn't fill (underrun guard).
-                    dst[n..].fill(0.0);
-
-                    let byte_count = (n * std::mem::size_of::<f32>()) as u32;
-
-                    // We're done when the feeder has finished AND the ring
-                    // buffer is now empty (all samples have been consumed).
-                    let done = feeder_done.load(std::sync::atomic::Ordering::SeqCst) && cons.is_empty();
-
-                    (byte_count, done)
-                };
-
-                let chunk = data.chunk_mut();
-                *chunk.offset_mut() = 0;
-                *chunk.size_mut() = byte_count;
-                *chunk.stride_mut() = (channels as i32) * (std::mem::size_of::<f32>() as i32);
-
-                if should_quit {
-                    finished_cb.set(true);
-                    let _ = stream.flush(true);
-                    quit_loop.quit();
-                }
-            })
-            .register()
-            .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
-
-        // ── Format negotiation (SPA Pod) ──────────────────────────────────
-
-        let format_pod_bytes = build_format_pod(rate, channels).map_err(|e| AdhanError::AudioPlayback(e))?;
-
+        // ── Format negotiation + connect ──────────────────────────────────
+        let format_pod_bytes = build_format_pod(rate, channels).map_err(AdhanError::AudioPlayback)?;
         let format_pod = Pod::from_bytes(&format_pod_bytes)
             .ok_or_else(|| AdhanError::AudioPlayback("failed to construct SPA format pod".into()))?;
 
@@ -238,8 +127,7 @@ impl AudioBackend for PipewireBackend {
             )
             .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
 
-        // ── Run until `process` signals completion ────────────────────────
-
+        // ── Run until the process callback signals completion ─────────────
         mainloop.run();
 
         if !finished.get() {
@@ -252,9 +140,161 @@ impl AudioBackend for PipewireBackend {
     }
 }
 
+// ── Feeder thread ─────────────────────────────────────────────────────────────
+
+/// Spawns a thread that drains `source` and pushes f32 samples into `producer`
+/// in fixed-size chunks.
+///
+/// The feeder has no dependency on PipeWire — it only knows about the ring
+/// buffer and the done flag. This makes it independently understandable and
+/// keeps the chunked-write logic separate from the PipeWire session code.
+///
+/// Chunk size is 512 samples — at 48 kHz stereo that is ~5 ms of audio,
+/// matching a typical PipeWire quantum. Large enough to amortise loop
+/// overhead, small enough not to stall the feeder waiting to fill it.
+///
+/// When the source is exhausted, `feeder_done` is set to `true` so the
+/// process callback knows it can quit once the ring buffer has been drained.
+fn spawn_feeder_thread(
+    mut source: Box<dyn rodio::Source<Item = f32> + Send>,
+    mut producer: ringbuf::HeapProd<f32>,
+    feeder_done: Arc<std::sync::atomic::AtomicBool>,
+) {
+    thread::spawn(move || {
+        const CHUNK: usize = 512;
+        let mut buf = Vec::with_capacity(CHUNK);
+
+        'outer: loop {
+            buf.clear();
+            for sample in source.by_ref().take(CHUNK) {
+                buf.push(sample);
+            }
+
+            // Source exhausted and nothing buffered — we're done.
+            if buf.is_empty() {
+                break 'outer;
+            }
+
+            // Push the chunk into the ring buffer. If there isn't enough
+            // space, sleep briefly and retry rather than spinning hard.
+            let mut written = 0;
+            while written < buf.len() {
+                let n = producer.push_slice(&buf[written..]);
+                written += n;
+                if written < buf.len() {
+                    thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
+
+            // Fewer samples than requested means the source is exhausted.
+            if buf.len() < CHUNK {
+                break 'outer;
+            }
+        }
+
+        feeder_done.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
+// ── Process callback ──────────────────────────────────────────────────────────
+
+/// Registers the real-time `process` callback on `stream` and returns the
+/// `finished` flag that will be set to `true` once playback is complete.
+///
+/// # Shared state
+///
+/// The callback runs on the PipeWire main loop thread, so `Rc`/`RefCell` are
+/// sufficient for interior mutability — no mutex needed. The `feeder_done`
+/// flag crosses the thread boundary from the feeder thread and therefore uses
+/// `Arc<AtomicBool>`.
+///
+/// # Real-time contract
+///
+/// The callback must not allocate, block, or perform I/O. It only:
+/// - pops samples from the lock-free ring buffer into PipeWire's buffer,
+/// - zeros any unfilled frames (underrun guard),
+/// - sets chunk metadata (offset / size / stride),
+/// - quits the main loop once the feeder is done and the buffer is empty.
+///
+/// # Listener lifetime
+///
+/// The returned `finished` flag must be checked only after `mainloop.run()`
+/// returns. The listener is leaked via `mem::forget` so it remains registered
+/// for the entire duration of the main loop run, and is reclaimed when the
+/// enclosing `play_blocking` stack frame unwinds.
+fn register_process_callback(
+    stream: &StreamBox,
+    consumer: HeapCons<f32>,
+    feeder_done: Arc<std::sync::atomic::AtomicBool>,
+    quit_loop: MainLoopRc,
+    channels: u16,
+) -> Result<Rc<Cell<bool>>, AdhanError> {
+    let consumer_cell = Rc::new(std::cell::RefCell::new(consumer));
+    let finished = Rc::new(Cell::new(false));
+
+    let consumer_cb = Rc::clone(&consumer_cell);
+    let finished_cb = Rc::clone(&finished);
+
+    let listener: StreamListener<()> = stream
+        .add_local_listener::<()>()
+        .process(move |stream, _userdata| {
+            let Some(mut buf) = stream.dequeue_buffer() else {
+                return;
+            };
+
+            let datas = buf.datas_mut();
+            let data = &mut datas[0];
+
+            let (byte_count, should_quit) = {
+                let dst_raw: &mut [u8] = match data.data() {
+                    Some(d) => d,
+                    None => return,
+                };
+
+                let max_samples = dst_raw.len() / std::mem::size_of::<f32>();
+                let dst: &mut [f32] =
+                    bytemuck::cast_slice_mut(&mut dst_raw[..max_samples * std::mem::size_of::<f32>()]);
+
+                let mut cons = consumer_cb.borrow_mut();
+                let n = cons.pop_slice(dst);
+
+                // Zero any frames we couldn't fill — prevents stale audio
+                // from a previous callback invocation leaking through.
+                dst[n..].fill(0.0);
+
+                let byte_count = (n * std::mem::size_of::<f32>()) as u32;
+
+                // We're done when the feeder has finished AND the ring buffer
+                // is empty — every decoded sample has been handed to PipeWire.
+                let done = feeder_done.load(std::sync::atomic::Ordering::SeqCst) && cons.is_empty();
+
+                (byte_count, done)
+            };
+
+            let chunk = data.chunk_mut();
+            *chunk.offset_mut() = 0;
+            *chunk.size_mut() = byte_count;
+            *chunk.stride_mut() = (channels as i32) * (std::mem::size_of::<f32>() as i32);
+
+            if should_quit {
+                finished_cb.set(true);
+                let _ = stream.flush(true);
+                quit_loop.quit();
+            }
+        })
+        .register()
+        .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
+
+    // Keep the listener alive for the full duration of mainloop.run().
+    // It will be reclaimed when play_blocking's stack frame unwinds.
+    std::mem::forget(listener);
+
+    Ok(finished)
+}
+
 // ── Format Pod builder ────────────────────────────────────────────────────────
 
-/// Serialise an `EnumFormat` SPA Object Pod describing interleaved f32 PCM.
+/// Serialises an `EnumFormat` SPA Object Pod describing interleaved f32 PCM.
 ///
 /// This is the mandatory parameter passed to `Stream::connect`. PipeWire uses
 /// it to negotiate the audio format between our client and the chosen sink.
