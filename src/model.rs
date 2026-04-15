@@ -54,7 +54,7 @@ impl AdhanType {
     /// `audio/normal/`). Having an explicit method — rather than relying on a
     /// `Display` impl — makes the coupling between this type and the filesystem
     /// layout visible and keeps it in one place.
-    pub(crate) fn subfolder_name(self) -> &'static str {
+    pub(crate) const fn subfolder_name(self) -> &'static str {
         match self {
             Self::Normal => "normal",
             Self::Fajr => "fajr",

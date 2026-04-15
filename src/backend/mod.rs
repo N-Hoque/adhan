@@ -42,3 +42,7 @@ pub use self::pipewire::PipewireBackend as PlatformBackend;
 pub use self::rodio::RodioBackend as PlatformBackend;
 #[cfg(target_os = "windows")]
 pub use self::wasapi::WasapiBackend as PlatformBackend;
+
+// Fallback to rodio for all other OSes
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub use self::rodio::RodioBackend as PlatformBackend;
