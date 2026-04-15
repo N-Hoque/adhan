@@ -35,9 +35,7 @@ pub trait AudioBackend {
 
 #[cfg(target_os = "linux")]
 pub use self::pipewire::PipewireBackend as PlatformBackend;
-
 #[cfg(target_os = "macos")]
 pub use self::rodio::RodioBackend as PlatformBackend;
-
 #[cfg(target_os = "windows")]
 pub use self::rodio::RodioBackend as PlatformBackend;
