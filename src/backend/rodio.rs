@@ -1,4 +1,4 @@
-use rodio::{OutputStreamBuilder, Sink};
+use rodio::{DeviceSinkBuilder, Player};
 
 use crate::{backend::AudioBackend, model::AdhanError};
 
@@ -17,18 +17,17 @@ impl AudioBackend for RodioBackend {
         // Open a stream to the system default output device.  There is no
         // device-selection logic here by design — routing is delegated to the
         // platform audio service.
-        let stream =
-            OutputStreamBuilder::open_default_stream().map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
+        let stream = DeviceSinkBuilder::open_default_sink().map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
         let mixer = stream.mixer();
 
-        let sink = Sink::connect_new(mixer);
+        let player = Player::connect_new(mixer);
 
         // Append the source directly — rodio pulls samples lazily as the sink
         // drains, so no pre-decode or allocation is needed here.
-        sink.append(source);
+        player.append(source);
 
         // Block the calling thread until the sink has drained completely.
-        sink.sleep_until_end();
+        player.sleep_until_end();
 
         Ok(())
     }

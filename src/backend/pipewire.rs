@@ -111,10 +111,10 @@ impl AudioBackend for PipewireBackend {
         .map_err(|e| AdhanError::AudioPlayback(e.to_string()))?;
 
         // ── Process callback ──────────────────────────────────────────────
-        let finished = register_process_callback(&stream, consumer, feeder_done, mainloop.clone(), channels)?;
+        let finished = register_process_callback(&stream, consumer, feeder_done, mainloop.clone(), channels.into())?;
 
         // ── Format negotiation + connect ──────────────────────────────────
-        let format_pod_bytes = build_format_pod(rate, channels).map_err(AdhanError::AudioPlayback)?;
+        let format_pod_bytes = build_format_pod(rate.into(), channels.into()).map_err(AdhanError::AudioPlayback)?;
         let format_pod = Pod::from_bytes(&format_pod_bytes)
             .ok_or_else(|| AdhanError::AudioPlayback("failed to construct SPA format pod".into()))?;
 
