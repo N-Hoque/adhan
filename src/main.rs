@@ -1,12 +1,9 @@
 use std::{thread::sleep, time::Duration};
 
-use adhan::model::AdhanError;
-use adhan::schedule::next_midnight_after;
 use adhan::{
-    build_prayer_queue, create_config, initialize_user_config_directory, new_timetable, read_config,
-    AdhanCommands, AdhanPlayer, PrayerEventHandler, PrayerNotifier,
+    build_prayer_queue, create_config, initialize_user_config_directory, model::AdhanError, new_timetable, read_config,
+    schedule::next_midnight_after, AdhanCommands, AdhanPlayer, PrayerEventHandler, PrayerNotifier,
 };
-
 use chrono::{Datelike, Local};
 use clap::Parser;
 
@@ -48,10 +45,7 @@ fn exit_on_error<T>(result: Result<T, AdhanError>, code: i32) -> T {
 fn run() -> ! {
     let parameters = exit_on_error(read_config(), CONFIGURATION_READ_EXIT_CODE);
 
-    let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![
-        Box::new(PrayerNotifier),
-        Box::new(AdhanPlayer),
-    ];
+    let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![Box::new(PrayerNotifier), Box::new(AdhanPlayer)];
 
     log::info!("Started Adhan!");
 
@@ -148,10 +142,7 @@ fn main() {
             } else {
                 salah::Event::Prayer(salah::Prayer::Isha)
             };
-            let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![
-                Box::new(PrayerNotifier),
-                Box::new(AdhanPlayer),
-            ];
+            let handlers: Vec<Box<dyn PrayerEventHandler>> = vec![Box::new(PrayerNotifier), Box::new(AdhanPlayer)];
             let event_name = event.name();
             for handler in &handlers {
                 if let Err(err) = handler.on_prayer(&event, event_name) {

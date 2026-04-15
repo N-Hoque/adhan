@@ -1,19 +1,19 @@
 use std::{cell::Cell, rc::Rc, sync::Arc, thread};
 
-use pipewire::spa::{
-    param::audio::{AudioFormat, AudioInfoRaw},
-    pod::{serialize::PodSerializer, Object, Pod, Property, PropertyFlags, Value},
-    sys::{
-        SPA_FORMAT_AUDIO_channels, SPA_FORMAT_AUDIO_format, SPA_FORMAT_AUDIO_rate, SPA_FORMAT_mediaSubtype,
-        SPA_FORMAT_mediaType, SPA_MEDIA_SUBTYPE_raw, SPA_MEDIA_TYPE_audio, SPA_PARAM_EnumFormat,
-        SPA_TYPE_OBJECT_Format,
-    },
-    utils::{Direction, Id},
-};
 use pipewire::{
     context::ContextBox,
     main_loop::MainLoopRc,
     properties::properties,
+    spa::{
+        param::audio::{AudioFormat, AudioInfoRaw},
+        pod::{serialize::PodSerializer, Object, Pod, Property, PropertyFlags, Value},
+        sys::{
+            SPA_FORMAT_AUDIO_channels, SPA_FORMAT_AUDIO_format, SPA_FORMAT_AUDIO_rate, SPA_FORMAT_mediaSubtype,
+            SPA_FORMAT_mediaType, SPA_MEDIA_SUBTYPE_raw, SPA_MEDIA_TYPE_audio, SPA_PARAM_EnumFormat,
+            SPA_TYPE_OBJECT_Format,
+        },
+        utils::{Direction, Id},
+    },
     stream::{StreamBox, StreamFlags, StreamListener},
 };
 use ringbuf::{

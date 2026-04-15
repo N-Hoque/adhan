@@ -58,7 +58,7 @@ pub(crate) fn select_audio_file(adhan_type: AdhanType) -> Result<PathBuf, AdhanE
     candidates
         .choose(&mut rng)
         .cloned()
-        .ok_or_else(|| AdhanError::NoAudioFiles { path: subfolder })
+        .ok_or(AdhanError::NoAudioFiles { path: subfolder })
 }
 
 /// Plays the appropriate adhan audio for the given prayer event.
