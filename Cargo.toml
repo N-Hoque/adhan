@@ -16,7 +16,7 @@ log = "0.4.29"
 rand = "0.10.1"
 rodio = "0.22.2"
 serde = { version = "1.0.228", features = ["derive"] }
-serde_yaml = "0.9.34"
+serde_yml = "0.0.12"
 simplelog = "0.12.2"
 thiserror = "2.0.18"
 notify-rust = "4.15.0"
