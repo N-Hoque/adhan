@@ -1,4 +1,4 @@
-use std::{io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 /// Audio file extensions that rodio can decode with its default feature set.
 ///
@@ -88,10 +88,9 @@ pub fn play_adhan(prayer: Event) -> Result<(), AdhanError> {
         .open(&audio_file_path)
         .map_err(AdhanError::Io)?;
 
-    let decoder = Decoder::new(BufReader::new(file)).map_err(AdhanError::AudioDecode)?;
-    let source = Box::new(rodio::source::Source::convert_samples::<f32>(decoder));
+    let source = Decoder::try_from(file).map_err(AdhanError::AudioDecode)?;
 
-    PlatformBackend.play_blocking(source)
+    PlatformBackend.play_blocking(Box::new(source))
 }
 
 /// A `PrayerEventHandler` that plays the appropriate adhan audio file.
